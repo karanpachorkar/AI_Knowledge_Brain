@@ -14,6 +14,9 @@ from app.schemas.document import DocumentCreate, DocumentVersionCreate
 from app.services.file_validation_service import FileValidationService
 
 
+from app.services.indexing_service import IndexingService
+
+
 class DocumentIngestionService:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -21,6 +24,7 @@ class DocumentIngestionService:
         self.kb_repo = KnowledgeBaseRepository(session)
         self.storage = MinIOStorageProvider()
         self.parser = StandardDocumentParser()
+        self.indexing_service = IndexingService()
 
     async def upload_and_process_document(
         self,
@@ -102,6 +106,9 @@ class DocumentIngestionService:
             document_id=doc.id,
             document_version_id=version.id
         )
+
+        # 7. Index Chunks into Qdrant & OpenSearch
+        await self.indexing_service.index_chunks(chunks)
 
         # Update version status to READY
         version.status = "READY"

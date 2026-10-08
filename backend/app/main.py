@@ -40,14 +40,17 @@ if settings.CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+import traceback
+
 # Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()
+    error_str = str(exc).encode("ascii", errors="replace").decode("ascii")
     logger.error(
         "Unhandled Application Exception",
         path=request.url.path,
-        error=str(exc),
-        exc_info=True
+        error=error_str
     )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

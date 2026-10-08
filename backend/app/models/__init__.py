@@ -6,6 +6,7 @@ from app.models.workspace import Workspace
 from app.models.knowledge_base import KnowledgeBase
 from app.models.document_type import DocumentType
 from app.models.document import Document, DocumentVersion, DocumentACL
+from app.models.chat import Conversation, Message
 
 __all__ = [
     "Base",
@@ -22,4 +23,6 @@ __all__ = [
     "Document",
     "DocumentVersion",
     "DocumentACL",
+    "Conversation",
+    "Message",
 ]
