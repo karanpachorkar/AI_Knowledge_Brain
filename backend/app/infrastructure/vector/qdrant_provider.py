@@ -19,7 +19,7 @@ class QdrantVectorProvider:
         points = []
         for chunk, vector in zip(chunks, embeddings):
             point = {
-                "id": str(chunk.id),
+                "id": chunk.id,
                 "vector": vector,
                 "payload": {
                     "tenant_id": chunk.tenant_id,

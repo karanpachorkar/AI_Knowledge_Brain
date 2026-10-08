@@ -60,9 +60,10 @@ async def create_user(
         hashed_password=hashed_pw,
         roles=roles
     )
-    await db.commit()
-    user = await user_repo.get_by_id(user.id)
-    return AuthService.format_user_response(user)
+    created_user = await user_repo.get_by_id(user.id)
+    if not created_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Created user not found.")
+    return AuthService.format_user_response(created_user)
 
 
 @router.get("/{user_id}", response_model=UserResponse)

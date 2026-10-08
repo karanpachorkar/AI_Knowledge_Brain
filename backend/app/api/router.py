@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.api.v1 import (
+    audit,
     auth,
     chat,
     document_types,
@@ -27,3 +28,4 @@ api_router.include_router(documents.router, tags=["Documents"])
 api_router.include_router(search.router, tags=["Search & Retrieval"])
 api_router.include_router(chat.router, tags=["RAG Chat"])
 api_router.include_router(models.router, tags=["Model Gateway"])
+api_router.include_router(audit.router, tags=["Audit Logs"])

@@ -7,6 +7,7 @@ from app.models.knowledge_base import KnowledgeBase
 from app.models.document_type import DocumentType
 from app.models.document import Document, DocumentVersion, DocumentACL
 from app.models.chat import Conversation, Message
+from app.models.audit import AuditLog
 
 __all__ = [
     "Base",
@@ -25,4 +26,5 @@ __all__ = [
     "DocumentACL",
     "Conversation",
     "Message",
+    "AuditLog",
 ]
