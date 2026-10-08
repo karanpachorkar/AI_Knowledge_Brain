@@ -1,0 +1,2946 @@
+# MASTER BUILD PROMPT
+
+## Generic Enterprise AI Knowledge Platform — Build From Scratch
+
+You are acting as a **senior enterprise software architect, AI/RAG architect, backend engineer, frontend engineer, DevOps engineer, security engineer, and QA engineer**.
+
+Your task is to build a **production-grade, generic Enterprise AI Knowledge Platform from complete scratch**.
+
+This is NOT a Glatt-specific application.
+
+The product must be designed so that:
+
+> **Today it can be deployed at Glatt. Tomorrow the exact same product can be deployed for another company without changing the core architecture or source code.**
+
+The system must support multiple organizations/tenants, multiple users, configurable knowledge bases, configurable document types, multiple AI providers, enterprise RAG, permissions, auditability, and future agentic AI capabilities.
+
+---
+
+# 1. MOST IMPORTANT PRINCIPLE
+
+Build this as a **reusable enterprise AI product**, not as a project-specific application.
+
+DO NOT hardcode:
+
+- Glatt
+- Glatt-specific document types
+- Glatt-specific departments
+- Glatt-specific workflows
+- Glatt-specific users
+- Glatt-specific IP addresses
+- Glatt-specific model names
+- Glatt-specific database names
+- Glatt-specific storage paths
+- credentials
+- API keys
+- company-specific terminology
+
+Everything that can reasonably vary between organizations must be configurable.
+
+Examples:
+
+```text
+Organization
+Tenant
+Workspace
+Knowledge Base
+Document Type
+Department
+Role
+Permission
+AI Provider
+AI Model
+Embedding Model
+Reranker
+OCR Provider
+Parser
+Retention Policy
+```
+
+These must be configuration/data-driven.
+
+---
+
+# 2. PRIMARY DEPLOYMENT TARGET
+
+The initial production deployment will be:
+
+```text
+On-Premise Company Server
+        ↓
+Windows Server / Windows PC
+        ↓
+Docker Desktop / Docker Engine
+        ↓
+Docker Compose
+        ↓
+Entire Enterprise AI Platform
+```
+
+Company users access the application from their browsers through the company LAN.
+
+Example:
+
+```text
+Employee PC
+    ↓
+Browser
+    ↓
+http://SERVER-IP:APPLICATION-PORT
+    ↓
+Enterprise AI Platform
+```
+
+Docker is the **preferred deployment mechanism for V1**.
+
+However:
+
+### IMPORTANT
+
+Docker must NOT leak into the application architecture.
+
+The application must remain portable so that later it can run on:
+
+```text
+Windows
+Linux
+Cloud VM
+Dedicated customer server
+Docker
+Kubernetes
+Managed cloud infrastructure
+```
+
+Do not make business logic dependent on Docker.
+
+Docker is simply the packaging/deployment/runtime layer.
+
+---
+
+# 3. INITIAL AI STRATEGY
+
+The initial implementation must use **open-source/local AI models**.
+
+The system should be designed so that later we can switch to:
+
+```text
+OpenAI
+Anthropic
+Google Gemini
+Azure OpenAI
+Cohere
+Other open-source models
+Self-hosted models
+```
+
+WITHOUT rewriting the application.
+
+Therefore:
+
+> Never directly call Ollama, OpenAI, Anthropic, Gemini, etc. from business logic.
+
+All AI calls must go through a provider abstraction.
+
+---
+
+# 4. TARGET ARCHITECTURE
+
+Use a **Modular Monolith + Background Worker architecture** for V1.
+
+DO NOT create unnecessary microservices.
+
+Logical architecture:
+
+```text
+                        ┌─────────────────────────────┐
+                        │        Enterprise Users     │
+                        │ Browser / Web Application   │
+                        └──────────────┬──────────────┘
+                                       │
+                                       ▼
+                        ┌─────────────────────────────┐
+                        │       Web / API Layer       │
+                        │      FastAPI Backend        │
+                        └──────────────┬──────────────┘
+                                       │
+                 ┌─────────────────────┼─────────────────────┐
+                 │                     │                     │
+                 ▼                     ▼                     ▼
+          Authentication        Authorization          API Layer
+          & Sessions             & RBAC                  & Validation
+                 │                     │
+                 └──────────────┬──────┘
+                                ▼
+                    ┌─────────────────────────┐
+                    │   Application Core      │
+                    │                         │
+                    │ Knowledge Management    │
+                    │ Document Management     │
+                    │ RAG Orchestration       │
+                    │ Chat                  │
+                    │ AI Model Gateway        │
+                    │ Audit                  │
+                    │ Administration          │
+                    └───────────┬─────────────┘
+                                │
+          ┌─────────────────────┼─────────────────────┐
+          │                     │                     │
+          ▼                     ▼                     ▼
+   PostgreSQL                Redis              Background Worker
+   System of Record          Cache              Async Processing
+          │                                         │
+          │                                         ▼
+          │                               Ingestion Pipeline
+          │                                         │
+          │                         ┌───────────────┼──────────────┐
+          │                         ▼               ▼              ▼
+          │                       Parser           OCR         Structure
+          │                         │               │              │
+          │                         └───────────────┼──────────────┘
+          │                                         ▼
+          │                                      Chunking
+          │                                         │
+          │                                         ▼
+          │                                      Embedding
+          │                                         │
+          │                          ┌──────────────┴──────────────┐
+          │                          ▼                             ▼
+          │                       Qdrant                      OpenSearch
+          │                     Vector Search                 BM25 Search
+          │                          │                             │
+          │                          └──────────────┬──────────────┘
+          │                                         ▼
+          │                                  Hybrid Retrieval
+          │                                         │
+          │                                         ▼
+          │                                      Reranker
+          │                                         │
+          │                                         ▼
+          │                                  Context Builder
+          │                                         │
+          │                                         ▼
+          │                                   Model Gateway
+          │                                         │
+          │                                         ▼
+          │                                Local / Cloud LLM
+          │
+          ▼
+       MinIO
+ Object Storage
+```
+
+---
+
+# 5. TECHNOLOGY STACK
+
+Use the following initial stack unless there is a strong technical reason to change something.
+
+## Backend
+
+```text
+Python
+FastAPI
+Pydantic
+SQLAlchemy
+Alembic
+```
+
+Use clean architecture principles.
+
+Suggested layers:
+
+```text
+API
+Application
+Domain
+Infrastructure
+```
+
+Do not put business logic directly inside FastAPI routes.
+
+---
+
+# 6. FRONTEND
+
+Use:
+
+```text
+React
+TypeScript
+Next.js
+```
+
+The UI should be production-quality and responsive.
+
+Initial screens:
+
+### Authentication
+
+```text
+Login
+Register
+Forgot Password
+Reset Password
+```
+
+### Main Application
+
+```text
+Dashboard
+Knowledge Bases
+Documents
+Document Versions
+Chat
+Conversations
+Search
+Users
+Roles
+Permissions
+Administration
+AI Providers
+Models
+System Settings
+Audit Logs
+```
+
+---
+
+# 7. AUTHENTICATION
+
+DO NOT use:
+
+```text
+IIS Authentication
+Windows Authentication
+Kerberos
+Active Directory
+Mandatory SSO
+```
+
+Authentication must belong to the application.
+
+Initial authentication:
+
+```text
+Email
+Password
+Secure password hashing
+Session / JWT
+Refresh token
+Logout
+Password reset
+```
+
+Use a modern password hashing algorithm such as:
+
+```text
+Argon2id
+```
+
+Authentication and authorization must be separate concepts.
+
+Future extension points may support:
+
+```text
+OIDC
+SAML
+Microsoft Entra ID
+LDAP
+SSO
+```
+
+but these must NOT be required for V1.
+
+---
+
+# 8. MULTI-TENANCY
+
+Multi-tenancy is a fundamental architectural requirement.
+
+Every organization must be isolated.
+
+Example:
+
+```text
+Tenant A
+ ├── Users
+ ├── Workspaces
+ ├── Knowledge Bases
+ ├── Documents
+ ├── Conversations
+ └── AI configuration
+
+Tenant B
+ ├── Users
+ ├── Workspaces
+ ├── Knowledge Bases
+ ├── Documents
+ ├── Conversations
+ └── AI configuration
+```
+
+Tenant A must NEVER be able to access Tenant B data.
+
+Tenant ID must be enforced at:
+
+```text
+Database
+API
+Authorization
+Document retrieval
+Vector retrieval
+Keyword retrieval
+Chat
+Storage
+Background jobs
+Audit logs
+```
+
+Do not rely only on frontend filtering.
+
+---
+
+# 9. AUTHORIZATION
+
+Implement RBAC.
+
+Initial roles may include:
+
+```text
+Platform Admin
+Tenant Admin
+Knowledge Manager
+User
+Viewer
+```
+
+But roles must be configurable.
+
+Permissions should be granular.
+
+Examples:
+
+```text
+document.read
+document.upload
+document.delete
+document.manage
+knowledgebase.read
+knowledgebase.manage
+chat.use
+user.manage
+role.manage
+audit.read
+model.manage
+system.manage
+```
+
+Authorization must happen BEFORE retrieval.
+
+This is extremely important.
+
+---
+
+# 10. PERMISSION-AWARE RAG
+
+Unauthorized information must NEVER reach the LLM.
+
+Correct flow:
+
+```text
+User
+ ↓
+Authenticate
+ ↓
+Authorize
+ ↓
+Determine accessible Knowledge Bases
+ ↓
+Determine accessible Documents
+ ↓
+Retrieve only authorized chunks
+ ↓
+Rerank
+ ↓
+Build context
+ ↓
+LLM
+```
+
+Incorrect architecture:
+
+```text
+Retrieve everything
+ ↓
+Give everything to LLM
+ ↓
+Filter response
+```
+
+NEVER implement the second approach.
+
+---
+
+# 11. KNOWLEDGE ARCHITECTURE
+
+The platform must support:
+
+```text
+Tenant
+  ↓
+Workspace
+  ↓
+Knowledge Base
+  ↓
+Document
+  ↓
+Document Version
+  ↓
+Document Pages / Sections
+  ↓
+Chunks
+```
+
+Example:
+
+```text
+Company
+ └── Engineering Workspace
+      └── Machine Documentation KB
+           ├── Manual.pdf
+           │    ├── Version 1
+           │    └── Version 2
+           │
+           ├── SOP.pdf
+           └── Service Report.docx
+```
+
+---
+
+# 12. DOCUMENT TYPES
+
+DO NOT hardcode document types.
+
+Do NOT create code such as:
+
+```python
+if document_type == "URS":
+```
+
+Instead create configurable document types.
+
+Examples that could be configured:
+
+```text
+SOP
+URS
+CAPA
+IFAT
+Manual
+Service Report
+Validation Document
+Drawing
+Specification
+Policy
+Contract
+Training Material
+```
+
+But these are only examples.
+
+The platform must support arbitrary future document types.
+
+---
+
+# 13. DOCUMENT VERSIONING
+
+Documents must support versions.
+
+Example:
+
+```text
+Machine Manual
+ ├── Version 1.0
+ ├── Version 1.1
+ └── Version 2.0
+```
+
+Track:
+
+```text
+version number
+uploaded by
+upload date
+status
+checksum
+file size
+source
+effective date
+superseded date
+metadata
+processing status
+embedding model
+parser version
+OCR version
+```
+
+The system must know exactly which version produced each chunk.
+
+---
+
+# 14. OBJECT STORAGE
+
+Actual files should NOT be stored inside PostgreSQL.
+
+Use:
+
+```text
+MinIO
+```
+
+with S3-compatible abstraction.
+
+PostgreSQL stores:
+
+```text
+metadata
+relationships
+permissions
+document records
+version information
+processing status
+audit information
+```
+
+MinIO stores:
+
+```text
+PDF
+DOCX
+XLSX
+PPTX
+images
+scanned documents
+etc.
+```
+
+---
+
+# 15. DOCUMENT INGESTION PIPELINE
+
+The ingestion pipeline must be asynchronous.
+
+Flow:
+
+```text
+Upload
+ ↓
+Validate
+ ↓
+Store original file
+ ↓
+Create document/version record
+ ↓
+Queue processing job
+ ↓
+Parse
+ ↓
+OCR if necessary
+ ↓
+Extract structure
+ ↓
+Extract metadata
+ ↓
+Chunk
+ ↓
+Generate embeddings
+ ↓
+Index into Qdrant
+ ↓
+Index into OpenSearch
+ ↓
+Mark document READY
+```
+
+The UI should NOT block while large documents are processed.
+
+Show processing states:
+
+```text
+UPLOADED
+VALIDATING
+QUEUED
+PROCESSING
+OCR
+CHUNKING
+EMBEDDING
+INDEXING
+READY
+FAILED
+```
+
+---
+
+# 16. DOCUMENT PARSING
+
+Create a parser abstraction.
+
+Example:
+
+```python
+class DocumentParser:
+    def supports(self, mime_type: str) -> bool:
+        ...
+
+    def parse(self, document) -> ParsedDocument:
+        ...
+```
+
+Initial parser technology:
+
+```text
+Docling
+```
+
+But Docling must not be hardcoded into the domain layer.
+
+Future parsers:
+
+```text
+Unstructured
+Apache Tika
+Custom parsers
+Cloud document intelligence
+```
+
+---
+
+# 17. OCR
+
+Create an OCR abstraction.
+
+Initial local implementation can use:
+
+```text
+PaddleOCR / PaddleOCR-VL
+```
+
+But the architecture must allow:
+
+```text
+EasyOCR
+Tesseract
+Windows OCR
+Azure Document Intelligence
+Google Document AI
+Other OCR engines
+```
+
+OCR must be replaceable through configuration/provider abstraction.
+
+---
+
+# 18. TABLE AND STRUCTURED DOCUMENT SUPPORT
+
+Do not treat every document as plain text.
+
+The ingestion system must preserve:
+
+```text
+headings
+paragraphs
+tables
+lists
+page numbers
+sections
+figures
+captions
+metadata
+document hierarchy
+```
+
+Tables should remain identifiable as tables.
+
+Where practical, store structured representations in addition to flattened text.
+
+---
+
+# 19. CHUNKING
+
+Create a configurable chunking framework.
+
+Do not hardcode one chunk size globally.
+
+Support:
+
+```text
+chunk size
+overlap
+semantic chunking
+heading-aware chunking
+table-aware chunking
+page-aware chunking
+```
+
+Every chunk must retain metadata:
+
+```text
+tenant_id
+workspace_id
+knowledge_base_id
+document_id
+document_version_id
+page_number
+section
+document_type
+source
+permissions
+embedding_model
+embedding_version
+```
+
+---
+
+# 20. EMBEDDINGS
+
+Initial embedding model:
+
+```text
+BAAI BGE-M3
+```
+
+But embedding generation must use an abstraction:
+
+```python
+class EmbeddingProvider:
+    def embed_documents(...)
+    def embed_query(...)
+```
+
+Track:
+
+```text
+provider
+model
+model version
+embedding dimension
+created_at
+```
+
+Changing the embedding model must NOT silently corrupt the existing index.
+
+Implement controlled re-indexing.
+
+Example:
+
+```text
+Embedding Model A
+      ↓
+Existing Index
+
+Change to Model B
+      ↓
+Create new embedding/index version
+      ↓
+Re-index
+      ↓
+Validate
+      ↓
+Switch active index
+```
+
+---
+
+# 21. VECTOR DATABASE
+
+Use:
+
+```text
+Qdrant
+```
+
+for semantic vector search.
+
+The architecture must support:
+
+```text
+tenant filtering
+knowledge base filtering
+document filtering
+permission filtering
+version filtering
+metadata filtering
+```
+
+Never perform unrestricted vector search and filter security afterwards.
+
+---
+
+# 22. KEYWORD SEARCH
+
+Use:
+
+```text
+OpenSearch
+```
+
+for BM25/keyword search.
+
+This is required because enterprise documents contain:
+
+```text
+part numbers
+machine IDs
+error codes
+model numbers
+exact phrases
+technical identifiers
+document numbers
+```
+
+which semantic search alone may handle poorly.
+
+---
+
+# 23. HYBRID RETRIEVAL
+
+Use:
+
+```text
+Dense Vector Retrieval
++
+BM25 Keyword Retrieval
++
+Score Fusion
++
+Reranking
+```
+
+Example:
+
+```text
+User Query
+    │
+    ├──► Qdrant
+    │       ↓
+    │   Semantic Results
+    │
+    └──► OpenSearch
+            ↓
+        Keyword Results
+              │
+              ▼
+        Score Fusion
+              │
+              ▼
+          Reranker
+              │
+              ▼
+       Top Relevant Chunks
+```
+
+Implement the retrieval pipeline as modular components.
+
+---
+
+# 24. RERANKING
+
+Create a reranker abstraction.
+
+Initial implementation should support a local/open-source reranker.
+
+The architecture should allow:
+
+```text
+BGE reranker
+Qwen reranker
+Cohere Rerank
+Other future rerankers
+```
+
+The reranker must be replaceable without changing the RAG orchestration logic.
+
+---
+
+# 25. RAG ORCHESTRATION
+
+Implement a dedicated RAG orchestration layer.
+
+Flow:
+
+```text
+User Question
+ ↓
+Authentication
+ ↓
+Authorization
+ ↓
+Query Understanding
+ ↓
+Optional Query Rewrite
+ ↓
+Permission Scope
+ ↓
+Hybrid Retrieval
+ ↓
+Reranking
+ ↓
+Context Selection
+ ↓
+Prompt Construction
+ ↓
+LLM
+ ↓
+Grounding Validation
+ ↓
+Response + Citations
+```
+
+---
+
+# 26. HALLUCINATION CONTROL
+
+The system should prioritize:
+
+> "I don't have enough information in the available knowledge."
+
+over inventing an answer.
+
+The model should answer using retrieved evidence.
+
+Implement grounding rules.
+
+The response should clearly distinguish:
+
+```text
+Supported by sources
+Not found in sources
+Potential inference
+```
+
+Do not expose chain-of-thought.
+
+Only expose concise reasoning/explanation when useful.
+
+---
+
+# 27. CITATIONS
+
+Every grounded answer should provide citations.
+
+Example:
+
+```text
+According to the machine operating procedure, the cleaning cycle
+must be completed before the next batch.
+
+Sources:
+1. Machine_Manual.pdf
+   Version: 2.1
+   Page: 34
+   Section: Cleaning Procedure
+
+2. SOP-102.pdf
+   Version: 5
+   Page: 12
+```
+
+The UI should allow the user to click the citation and inspect the source.
+
+---
+
+# 28. CHAT
+
+Chat must support:
+
+```text
+Streaming responses
+Conversation history
+New conversation
+Rename conversation
+Delete conversation
+Source citations
+Knowledge Base selection
+Document scope
+```
+
+Example:
+
+```text
+Ask:
+"What is the recommended cleaning procedure?"
+
+Knowledge Base:
+[Machine Documentation ▼]
+
+Answer:
+...
+
+Sources:
+...
+```
+
+---
+
+# 29. AI MODEL GATEWAY
+
+This is one of the most important architectural components.
+
+Implement:
+
+```text
+AI Model Gateway
+```
+
+Application code must call:
+
+```text
+ModelGateway
+```
+
+NOT:
+
+```text
+Ollama
+OpenAI
+Anthropic
+Gemini
+```
+
+directly.
+
+---
+
+# 30. MODEL PROVIDER ABSTRACTION
+
+Create interfaces such as:
+
+```python
+class LLMProvider:
+    generate(...)
+    stream(...)
+```
+
+```python
+class EmbeddingProvider:
+    embed(...)
+```
+
+```python
+class RerankerProvider:
+    rerank(...)
+```
+
+```python
+class VisionProvider:
+    analyze(...)
+```
+
+```python
+class OCRProvider:
+    extract(...)
+```
+
+```python
+class DocumentAnalysisProvider:
+    analyze(...)
+```
+
+---
+
+# 31. CAPABILITY-BASED ROUTING
+
+Do not route models only by model name.
+
+Use capabilities.
+
+Example:
+
+```text
+CHAT_GENERATION
+QUERY_REWRITE
+EMBEDDING
+RERANKING
+VISION
+OCR
+DOCUMENT_ANALYSIS
+SUMMARIZATION
+```
+
+Example configuration:
+
+```text
+CHAT_GENERATION
+    ↓
+Qwen
+
+EMBEDDING
+    ↓
+BGE-M3
+
+RERANKING
+    ↓
+BGE Reranker
+
+VISION
+    ↓
+Qwen Vision
+```
+
+Later:
+
+```text
+CHAT_GENERATION
+    ↓
+GPT
+```
+
+without changing the RAG system.
+
+---
+
+# 32. INITIAL LOCAL MODEL RUNTIME
+
+Initial local AI runtime:
+
+```text
+Ollama
+```
+
+Initial model family should be configurable.
+
+Start with a suitable open-source Qwen model after benchmarking hardware capability.
+
+Do NOT hardcode the model.
+
+Example:
+
+```text
+OLLAMA_BASE_URL
+CHAT_MODEL
+EMBEDDING_MODEL
+RERANKER_MODEL
+VISION_MODEL
+```
+
+must come from configuration.
+
+---
+
+# 33. FUTURE HIGH-PERFORMANCE RUNTIME
+
+The architecture must later support:
+
+```text
+vLLM
+```
+
+without changing the application layer.
+
+Architecture:
+
+```text
+Application
+    ↓
+Model Gateway
+    ↓
+Provider Adapter
+    ↓
+Ollama / vLLM / Cloud API
+```
+
+---
+
+# 34. PROVIDER FALLBACK
+
+Implement provider fallback.
+
+Example:
+
+```text
+Primary Model
+     ↓
+Failure
+     ↓
+Fallback Model
+     ↓
+Failure
+     ↓
+Return controlled error
+```
+
+Do not silently switch models in a way that changes expected behavior without recording it.
+
+Record:
+
+```text
+provider
+model
+request ID
+latency
+status
+fallback used
+```
+
+---
+
+# 35. AI CONFIGURATION
+
+AI configuration must be stored/configured rather than hardcoded.
+
+Examples:
+
+```text
+Provider
+Model
+Capability
+Temperature
+Max tokens
+Context window
+Embedding model
+Reranker
+Timeout
+Retry policy
+Fallback provider
+```
+
+Do not expose secrets to frontend clients.
+
+---
+
+# 36. DATABASE
+
+Use:
+
+```text
+PostgreSQL
+```
+
+as the primary system of record.
+
+Design proper normalized models.
+
+At minimum expect entities around:
+
+```text
+Tenant
+User
+Role
+Permission
+UserRole
+Workspace
+KnowledgeBase
+Document
+DocumentVersion
+DocumentType
+DocumentMetadata
+DocumentACL
+Chunk
+Conversation
+Message
+Citation
+AIProvider
+AIModel
+AIConfiguration
+ProcessingJob
+AuditLog
+```
+
+Do not blindly create every possible entity if a simpler design is better.
+
+Use migrations with:
+
+```text
+Alembic
+```
+
+---
+
+# 37. REDIS
+
+Use Redis for:
+
+```text
+caching
+job state
+temporary state
+rate limiting
+streaming coordination
+background task support
+```
+
+Do not use Redis as the primary source of truth.
+
+---
+
+# 38. BACKGROUND WORKERS
+
+Heavy operations must be asynchronous.
+
+Examples:
+
+```text
+document parsing
+OCR
+chunking
+embedding
+indexing
+re-indexing
+document deletion
+large summarization
+batch processing
+```
+
+Use a mature background worker architecture.
+
+Celery is acceptable.
+
+---
+
+# 39. ADMINISTRATION
+
+Build an administration interface.
+
+Administrators should be able to manage:
+
+```text
+Tenants
+Users
+Roles
+Permissions
+Workspaces
+Knowledge Bases
+Document Types
+AI Providers
+AI Models
+AI Configurations
+System Settings
+Audit Logs
+```
+
+---
+
+# 40. OBSERVABILITY
+
+Implement structured logging.
+
+Every important operation should have:
+
+```text
+request_id
+tenant_id
+user_id
+operation
+timestamp
+status
+latency
+error
+```
+
+Track AI metrics:
+
+```text
+LLM latency
+embedding latency
+retrieval latency
+reranking latency
+tokens
+model used
+fallback usage
+errors
+```
+
+Do not log:
+
+```text
+passwords
+API keys
+tokens
+sensitive secrets
+unnecessary document contents
+```
+
+---
+
+# 41. AUDIT LOGGING
+
+Track important enterprise actions.
+
+Examples:
+
+```text
+login
+logout
+failed login
+document upload
+document deletion
+document version creation
+permission changes
+knowledge base changes
+AI configuration changes
+user creation
+role changes
+chat access where appropriate
+administrative actions
+```
+
+Audit records should include:
+
+```text
+who
+what
+when
+where/context
+tenant
+resource
+result
+```
+
+---
+
+# 42. SECURITY
+
+Implement:
+
+```text
+secure password hashing
+JWT/session security
+authorization
+tenant isolation
+input validation
+file type validation
+file size limits
+rate limiting
+secure headers
+CORS configuration
+secret management
+SQL injection protection
+path traversal protection
+SSRF protection where relevant
+safe document processing
+```
+
+Uploaded files must never be trusted blindly.
+
+---
+
+# 43. FILE SECURITY
+
+Validate:
+
+```text
+MIME type
+extension
+file signature
+size
+content
+```
+
+Do not trust filename extensions alone.
+
+Store uploaded files outside the application code directory.
+
+Generate safe internal object keys.
+
+---
+
+# 44. NETWORK ARCHITECTURE
+
+The Windows server will run the Docker stack.
+
+Example:
+
+```text
+                 COMPANY LAN
+                      │
+          ┌───────────┴───────────┐
+          │                       │
+       User PC                 User PC
+          │                       │
+          └───────────┬───────────┘
+                      │
+                      ▼
+              Application Port
+                      │
+                      ▼
+             ┌─────────────────┐
+             │ Docker Network   │
+             │                 │
+             │ Frontend        │
+             │ Backend         │
+             │ Worker          │
+             │ PostgreSQL      │
+             │ Redis           │
+             │ Qdrant          │
+             │ OpenSearch      │
+             │ MinIO           │
+             │ Ollama          │
+             └─────────────────┘
+```
+
+Only the required application entry point should be exposed to the LAN.
+
+Do NOT expose:
+
+```text
+PostgreSQL
+Redis
+Qdrant
+OpenSearch
+Ollama
+MinIO
+```
+
+directly to normal users.
+
+---
+
+# 45. DOCKER ARCHITECTURE
+
+Create:
+
+```text
+docker-compose.yml
+```
+
+with services approximately:
+
+```text
+frontend
+backend
+worker
+postgres
+redis
+qdrant
+opensearch
+minio
+ollama
+```
+
+Do not unnecessarily expose every service port.
+
+Use an internal Docker network.
+
+Use persistent volumes.
+
+Example:
+
+```text
+postgres_data
+qdrant_data
+opensearch_data
+redis_data
+minio_data
+ollama_data
+```
+
+---
+
+# 46. RESOURCE CONSTRAINTS
+
+The initial deployment may run on a relatively modest on-prem machine.
+
+Therefore:
+
+DO NOT assume:
+
+```text
+large GPU
+128 GB RAM
+multiple GPUs
+high-end server
+```
+
+The architecture must work with CPU-first deployment where necessary.
+
+AI models must be configurable based on available hardware.
+
+Provide a hardware configuration document with:
+
+```text
+minimum configuration
+recommended configuration
+GPU configuration
+CPU-only configuration
+```
+
+Do not force the largest model.
+
+---
+
+# 47. FRONTEND / BACKEND DEPLOYMENT
+
+Prefer a simple production deployment:
+
+```text
+Browser
+   ↓
+Frontend / Reverse Proxy
+   ↓
+FastAPI
+```
+
+If appropriate, use Nginx or another lightweight reverse proxy inside Docker.
+
+Do not introduce Kubernetes.
+
+Do not introduce service meshes.
+
+Do not introduce unnecessary infrastructure.
+
+---
+
+# 48. HTTPS
+
+V1 should support HTTP on the internal company LAN for initial testing.
+
+Architecture must allow HTTPS later.
+
+Do not hardcode certificates.
+
+Provide documentation for:
+
+```text
+internal TLS certificate
+certificate replacement
+HTTPS configuration
+```
+
+---
+
+# 49. CONFIGURATION
+
+All environment-specific configuration must use environment variables/config files.
+
+Examples:
+
+```text
+DATABASE_URL
+REDIS_URL
+QDRANT_URL
+OPENSEARCH_URL
+MINIO_ENDPOINT
+MINIO_ACCESS_KEY
+MINIO_SECRET_KEY
+OLLAMA_BASE_URL
+CHAT_MODEL
+EMBEDDING_MODEL
+RERANKER_MODEL
+JWT_SECRET
+APPLICATION_HOST
+APPLICATION_PORT
+```
+
+Never commit secrets.
+
+Provide:
+
+```text
+.env.example
+```
+
+but NEVER commit real secrets.
+
+---
+
+# 50. PROJECT STRUCTURE
+
+Create a clean repository structure.
+
+Example:
+
+```text
+enterprise-ai-platform/
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── domain/
+│   │   ├── application/
+│   │   ├── infrastructure/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── repositories/
+│   │   ├── workers/
+│   │   └── main.py
+│   │
+│   ├── tests/
+│   └── alembic/
+│
+├── frontend/
+│
+├── infrastructure/
+│   ├── docker/
+│   ├── compose/
+│   └── configs/
+│
+├── docs/
+│   ├── architecture/
+│   ├── deployment/
+│   ├── security/
+│   ├── api/
+│   └── adr/
+│
+├── scripts/
+│
+├── docker-compose.yml
+├── .env.example
+├── README.md
+└── LICENSE
+```
+
+You may improve this structure if there is a strong reason.
+
+---
+
+# 51. TESTING
+
+Testing is mandatory.
+
+Implement:
+
+### Unit tests
+
+```text
+authentication
+authorization
+tenant isolation
+document processing
+chunking
+retrieval
+RAG
+provider abstraction
+configuration
+```
+
+### Integration tests
+
+Test:
+
+```text
+PostgreSQL
+Qdrant
+OpenSearch
+Redis
+MinIO
+worker
+```
+
+### Security tests
+
+Especially:
+
+```text
+Tenant A cannot access Tenant B
+Unauthorized document cannot be retrieved
+Unauthorized chunk cannot reach LLM
+User cannot escalate permissions
+```
+
+### RAG tests
+
+Create deterministic evaluation questions.
+
+Measure:
+
+```text
+retrieval relevance
+citation correctness
+groundedness
+answer correctness
+```
+
+### Provider tests
+
+Create mock providers.
+
+The system must be testable without an external AI API.
+
+---
+
+# 52. IDEMPOTENCY
+
+Document ingestion must be idempotent.
+
+If the same file is uploaded twice, use checksums/hashes to detect duplicates where appropriate.
+
+Avoid:
+
+```text
+duplicate chunks
+duplicate vectors
+duplicate search records
+```
+
+Jobs should be safe to retry.
+
+---
+
+# 53. FAILURE HANDLING
+
+Every asynchronous job must handle:
+
+```text
+retry
+timeout
+failure
+partial failure
+recovery
+dead-letter / failed state
+```
+
+A failed document must not leave the system in an ambiguous state.
+
+Example:
+
+```text
+FAILED
+Reason:
+OCR processing failed
+```
+
+The user should be able to retry processing.
+
+---
+
+# 54. DATA RETENTION / DELETION
+
+Implement a proper document deletion workflow.
+
+Deleting a document should consider:
+
+```text
+PostgreSQL metadata
+MinIO file
+Qdrant vectors
+OpenSearch records
+cached data
+citations
+audit trail
+```
+
+Do not leave orphaned indexed data.
+
+---
+
+# 55. BACKUPS
+
+Document a backup strategy.
+
+At minimum:
+
+```text
+PostgreSQL backup
+MinIO backup
+Qdrant snapshot
+OpenSearch snapshot
+configuration backup
+```
+
+Understand that:
+
+```text
+PostgreSQL + original documents
+```
+
+are the most important sources of truth.
+
+Indexes should be rebuildable.
+
+---
+
+# 56. HEALTH CHECKS
+
+Each service should expose or support health checking.
+
+The application should have:
+
+```text
+/health
+/readiness
+```
+
+or equivalent.
+
+Health should distinguish:
+
+```text
+application healthy
+database unavailable
+vector DB unavailable
+search unavailable
+model unavailable
+worker unavailable
+```
+
+---
+
+# 57. API DESIGN
+
+Use clean REST APIs.
+
+Examples:
+
+```text
+/auth/login
+/auth/logout
+
+/users
+/roles
+/permissions
+
+/tenants
+/workspaces
+/knowledge-bases
+
+/documents
+/documents/{id}
+/documents/{id}/versions
+
+/search
+
+/chat
+/conversations
+/conversations/{id}
+
+/models
+/providers
+
+/admin/audit-logs
+```
+
+Use OpenAPI documentation.
+
+---
+
+# 58. API SECURITY
+
+Protect endpoints according to permissions.
+
+Do not rely on frontend hiding buttons.
+
+Backend must enforce everything.
+
+---
+
+# 59. UI REQUIREMENTS
+
+The UI should look like a serious enterprise SaaS product.
+
+Avoid a simple developer/demo interface.
+
+Dashboard should show useful information such as:
+
+```text
+Knowledge Bases
+Documents
+Processing Status
+Recent Activity
+Queries
+System Health
+AI Usage
+```
+
+Chat should be the primary user experience.
+
+---
+
+# 60. FUTURE AGENTIC ARCHITECTURE
+
+Do NOT over-engineer agentic AI in V1.
+
+However, design extension points.
+
+Future agents:
+
+```text
+Knowledge Agent
+SQL Agent
+Document Analysis Agent
+Calculation Agent
+Workflow Agent
+Tool Agent
+```
+
+Future architecture:
+
+```text
+User
+ ↓
+Agent Router
+ ↓
+Specialized Agent
+ ↓
+Tools / Knowledge / Models
+```
+
+V1 should primarily implement:
+
+```text
+Knowledge/RAG Agent
+```
+
+with clean interfaces for future agents.
+
+---
+
+# 61. MODEL EVALUATION
+
+Create an architecture for evaluating models.
+
+Eventually support:
+
+```text
+Question Dataset
+        ↓
+Model A
+Model B
+Model C
+        ↓
+Evaluate
+        ↓
+Accuracy
+Groundedness
+Retrieval quality
+Latency
+Resource usage
+Cost
+        ↓
+Select best configuration
+```
+
+Do not assume one model is permanently best.
+
+---
+
+# 62. DOCUMENT PROCESSING VERSIONING
+
+Track versions of:
+
+```text
+parser
+OCR
+chunker
+embedding model
+reranker
+```
+
+This is necessary so that we can reproduce how a document was processed.
+
+---
+
+# 63. REPRODUCIBILITY
+
+Given:
+
+```text
+document
+document version
+parser version
+OCR version
+chunking configuration
+embedding model/version
+```
+
+we should be able to understand how the resulting indexed chunks were generated.
+
+---
+
+# 64. LOGGING AND PRIVACY
+
+Never log:
+
+```text
+passwords
+JWT secrets
+API keys
+provider credentials
+raw sensitive document contents
+```
+
+Be careful with chat logging because enterprise documents may contain confidential information.
+
+---
+
+# 65. DOCUMENTATION
+
+Create excellent documentation.
+
+At minimum:
+
+```text
+README.md
+Architecture.md
+Deployment.md
+Development.md
+Security.md
+Configuration.md
+RAG.md
+ModelGateway.md
+Ingestion.md
+Troubleshooting.md
+BackupRestore.md
+```
+
+Also create ADRs for major architectural decisions.
+
+---
+
+# 66. ARCHITECTURE DECISION RECORDS
+
+Create ADRs for decisions such as:
+
+```text
+ADR-001 Modular Monolith
+ADR-002 PostgreSQL
+ADR-003 Qdrant
+ADR-004 OpenSearch
+ADR-005 MinIO
+ADR-006 Model Gateway
+ADR-007 Multi-Tenancy
+ADR-008 Permission-Aware Retrieval
+ADR-009 Docker Deployment
+ADR-010 Application Authentication
+```
+
+---
+
+# 67. DOCKER DEPLOYMENT
+
+Provide:
+
+```text
+docker-compose.yml
+.env.example
+Dockerfiles
+health checks
+persistent volumes
+network configuration
+startup dependencies
+restart policies
+```
+
+The application should be able to start with something equivalent to:
+
+```bash
+docker compose up -d
+```
+
+after configuration.
+
+---
+
+# 68. ON-PREMISE WINDOWS DEPLOYMENT DOCUMENT
+
+Create a complete guide for deploying to a Windows PC/server.
+
+Include:
+
+```text
+Windows prerequisites
+Docker installation
+Docker Compose
+CPU/RAM recommendations
+GPU recommendations
+environment configuration
+firewall
+application startup
+backup
+restore
+upgrade
+rollback
+logs
+health checks
+troubleshooting
+```
+
+Users should access the system through:
+
+```text
+http://SERVER-IP:PORT
+```
+
+from another PC on the same LAN.
+
+---
+
+# 69. FIREWALL
+
+Document the minimum required firewall configuration.
+
+Only expose:
+
+```text
+Application HTTP/HTTPS port
+```
+
+Do NOT expose internal service ports to the LAN unless explicitly required for administration.
+
+---
+
+# 70. STARTUP / RECOVERY
+
+After the Windows machine restarts:
+
+```text
+Docker starts
+ ↓
+Compose services start
+ ↓
+Database starts
+ ↓
+Application starts
+ ↓
+Worker starts
+ ↓
+AI services start
+ ↓
+Application becomes READY
+```
+
+Configure appropriate restart policies.
+
+---
+
+# 71. RESOURCE MANAGEMENT
+
+Because this may run on modest hardware:
+
+Implement sensible defaults for:
+
+```text
+worker concurrency
+document processing concurrency
+embedding batch size
+LLM context size
+model selection
+CPU threads
+memory limits where appropriate
+```
+
+Do not spawn excessive parallel workloads.
+
+---
+
+# 72. NO UNNECESSARY COMPLEXITY
+
+Do NOT introduce:
+
+```text
+Kubernetes
+Kafka
+service mesh
+multiple microservices
+complex event buses
+distributed tracing infrastructure
+cloud dependencies
+```
+
+unless a future requirement actually justifies them.
+
+The V1 goal is:
+
+> Simple enough to operate on one on-prem server, but architecturally strong enough to evolve into a large enterprise platform.
+
+---
+
+# 73. DEVELOPMENT PRINCIPLES
+
+Follow:
+
+```text
+SOLID
+DRY
+KISS
+Separation of Concerns
+Dependency Inversion
+12-factor configuration principles
+Secure-by-default design
+Testability
+Observability
+```
+
+Use type hints.
+
+Use linting and formatting.
+
+Use meaningful error handling.
+
+Do not create giant files.
+
+Do not put everything into `main.py`.
+
+---
+
+# 74. IMPORTANT IMPLEMENTATION RULE
+
+Do not build the entire system in one step.
+
+Build incrementally.
+
+Use the following milestones.
+
+---
+
+# MILESTONE 1 — FOUNDATION
+
+Build:
+
+```text
+Repository
+Backend skeleton
+Frontend skeleton
+Configuration system
+Docker Compose
+PostgreSQL
+Redis
+Basic health checks
+Alembic
+Base architecture
+Logging
+Testing framework
+```
+
+Deliver:
+
+```text
+architecture documentation
+repository structure
+docker-compose
+.env.example
+basic tests
+```
+
+STOP.
+
+Report:
+
+```text
+what was built
+files created
+tests executed
+test results
+known issues
+```
+
+Then WAIT for approval.
+
+---
+
+# MILESTONE 2 — AUTHENTICATION + MULTI-TENANCY
+
+Build:
+
+```text
+Users
+Tenants
+Roles
+Permissions
+Login
+Logout
+Password hashing
+Sessions/JWT
+Tenant isolation
+RBAC
+```
+
+Add tests.
+
+STOP and report.
+
+---
+
+# MILESTONE 3 — KNOWLEDGE ARCHITECTURE
+
+Build:
+
+```text
+Workspace
+Knowledge Base
+Document Type
+Document
+Document Version
+ACL
+Metadata
+```
+
+STOP and report.
+
+---
+
+# MILESTONE 4 — DOCUMENT INGESTION
+
+Build:
+
+```text
+MinIO
+Upload
+Validation
+Parser abstraction
+Docling integration
+OCR abstraction
+OCR implementation
+Structure extraction
+Chunking
+Processing jobs
+```
+
+STOP and report.
+
+---
+
+# MILESTONE 5 — INDEXING
+
+Build:
+
+```text
+Qdrant
+OpenSearch
+Embedding abstraction
+BGE-M3 integration
+Indexing
+Hybrid retrieval
+Metadata filtering
+Permission-aware retrieval
+```
+
+STOP and report.
+
+---
+
+# MILESTONE 6 — RAG
+
+Build:
+
+```text
+Query processing
+Hybrid retrieval
+Reranking
+Context construction
+LLM abstraction
+Grounding
+Citations
+Streaming
+Chat
+Conversation history
+```
+
+STOP and report.
+
+---
+
+# MILESTONE 7 — MODEL GATEWAY
+
+Build:
+
+```text
+Provider abstraction
+Ollama provider
+Capability routing
+Model configuration
+Fallback
+Model registry
+AI configuration UI/API
+```
+
+Benchmark suitable local models for the available hardware.
+
+STOP and report.
+
+---
+
+# MILESTONE 8 — SECURITY + AUDIT + OBSERVABILITY
+
+Build:
+
+```text
+Audit logs
+Security hardening
+Rate limiting
+File security
+Structured logs
+Metrics
+Health/readiness
+Error handling
+```
+
+STOP and report.
+
+---
+
+# MILESTONE 9 — PRODUCTION UI
+
+Build:
+
+```text
+Dashboard
+Knowledge Base UI
+Document management
+Processing status
+Chat UI
+Citations
+Administration
+Users
+Roles
+AI settings
+Audit UI
+```
+
+STOP and report.
+
+---
+
+# MILESTONE 10 — PRODUCTION DEPLOYMENT
+
+Build:
+
+```text
+Production Docker Compose
+Windows deployment guide
+Firewall guide
+Backup
+Restore
+Upgrade
+Rollback
+Startup/recovery
+Monitoring
+Troubleshooting
+Final security review
+```
+
+Then execute the complete acceptance test.
+
+---
+
+# 75. FINAL ACCEPTANCE TEST
+
+The platform is not complete until the following work.
+
+## Test 1 — Tenant Isolation
+
+Create:
+
+```text
+Tenant A
+Tenant B
+```
+
+Verify Tenant A cannot access Tenant B data.
+
+---
+
+## Test 2 — Users
+
+Create multiple users with different roles.
+
+Verify permissions.
+
+---
+
+## Test 3 — Documents
+
+Upload:
+
+```text
+PDF
+DOCX
+XLSX
+image/scanned document
+```
+
+Verify processing.
+
+---
+
+## Test 4 — Versioning
+
+Upload version 1.
+
+Upload version 2.
+
+Verify both are tracked correctly.
+
+---
+
+## Test 5 — Retrieval
+
+Ask questions about uploaded documents.
+
+Verify relevant sources are returned.
+
+---
+
+## Test 6 — Grounded RAG
+
+Ask a question answerable from documents.
+
+Verify:
+
+```text
+correct answer
+citations
+document
+version
+page/section
+```
+
+---
+
+## Test 7 — Unknown Question
+
+Ask something not present in the knowledge base.
+
+Expected:
+
+```text
+I don't have enough information in the available knowledge.
+```
+
+or equivalent controlled response.
+
+---
+
+## Test 8 — Permission-Aware RAG
+
+Create a document that User A can access but User B cannot.
+
+Ask the same question.
+
+Verify User B cannot retrieve the document or its chunks.
+
+---
+
+## Test 9 — Provider Switching
+
+Change:
+
+```text
+Model A
+```
+
+to:
+
+```text
+Model B
+```
+
+without modifying application code.
+
+Verify the system still works.
+
+---
+
+## Test 10 — Embedding Migration
+
+Change embedding configuration.
+
+Verify controlled re-indexing works.
+
+---
+
+## Test 11 — Restart
+
+Restart Docker/Windows.
+
+Verify the application recovers correctly.
+
+---
+
+## Test 12 — LAN Access
+
+From another PC:
+
+```text
+http://SERVER-IP:PORT
+```
+
+Verify users can access the application.
+
+---
+
+## Test 13 — Backup/Restore
+
+Create backup.
+
+Destroy test data.
+
+Restore.
+
+Verify application functionality.
+
+---
+
+# 76. HOW YOU MUST WORK
+
+You are NOT allowed to silently make major architectural changes.
+
+Whenever you believe an architectural decision needs to change:
+
+1. Explain the issue.
+2. Explain the current design.
+3. Explain the proposed change.
+4. Explain the trade-off.
+5. Ask for approval before changing the architecture.
+
+For normal implementation details, use engineering judgment.
+
+---
+
+# 77. CODE QUALITY REQUIREMENT
+
+Every milestone must leave the repository in a working state.
+
+Do NOT leave:
+
+```text
+broken imports
+placeholder functions pretending to work
+fake API responses
+hardcoded demo data
+temporary credentials
+hardcoded tenant names
+hardcoded model names
+```
+
+If a feature is not implemented yet, clearly mark it as:
+
+```text
+NOT IMPLEMENTED
+```
+
+rather than pretending it works.
+
+---
+
+# 78. TEST-FIRST MINDSET
+
+Before declaring a milestone complete:
+
+```text
+Implement
+ ↓
+Run tests
+ ↓
+Fix failures
+ ↓
+Run tests again
+ ↓
+Document results
+ ↓
+Report milestone
+```
+
+Do not claim success without actually testing.
+
+---
+
+# 79. FINAL PRODUCT VISION
+
+The final platform should look conceptually like:
+
+```text
+                    ENTERPRISE AI KNOWLEDGE PLATFORM
+                                 │
+             ┌───────────────────┼───────────────────┐
+             │                   │                   │
+          USERS              KNOWLEDGE             AI
+             │                   │                   │
+        Authentication      Documents          Model Gateway
+        Authorization       Versions            Providers
+        RBAC                Knowledge Bases     Models
+        Tenants             Permissions         Routing
+             │                   │                   │
+             └───────────────────┼───────────────────┘
+                                 │
+                              RAG CORE
+                                 │
+                 ┌───────────────┼───────────────┐
+                 │               │               │
+              Qdrant         OpenSearch       Reranker
+                 │               │               │
+                 └───────────────┼───────────────┘
+                                 │
+                              LLM
+                                 │
+                          Grounded Answer
+                                 │
+                              Citations
+```
+
+The product must ultimately be capable of becoming:
+
+```text
+On-Prem Enterprise AI
+        +
+Private Knowledge Platform
+        +
+RAG
+        +
+Agentic AI Foundation
+        +
+Multi-Tenant Enterprise SaaS
+```
+
+while keeping the V1 implementation operationally simple.
+
+---
+
+# 80. YOUR FIRST ACTION
+
+Before writing significant application code:
+
+1. Inspect the repository.
+2. Create the project structure.
+3. Create an architecture document.
+4. Create the initial ADRs.
+5. Create the Docker Compose foundation.
+6. Create the environment configuration.
+7. Create the FastAPI backend skeleton.
+8. Create the Next.js frontend skeleton.
+9. Create PostgreSQL/Redis connectivity.
+10. Create health checks.
+11. Create the initial test framework.
+12. Run the complete foundation test suite.
+
+Then report:
+
+```text
+MILESTONE 1 COMPLETE
+
+Architecture:
+...
+
+Files created:
+...
+
+Services:
+...
+
+Tests:
+...
+
+Test results:
+...
+
+Known issues:
+...
+
+Next milestone:
+...
+```
+
+DO NOT proceed to Milestone 2 automatically.
+
+Wait for my approval.
+
+---
+
+## CRITICAL FINAL RULE
+
+Do not optimize for writing the most code.
+
+Optimize for building a:
+
+**secure, generic, modular, testable, maintainable, enterprise-ready AI platform that can start on one modest on-prem Windows machine using Docker and later scale to other environments without rewriting the architecture.**

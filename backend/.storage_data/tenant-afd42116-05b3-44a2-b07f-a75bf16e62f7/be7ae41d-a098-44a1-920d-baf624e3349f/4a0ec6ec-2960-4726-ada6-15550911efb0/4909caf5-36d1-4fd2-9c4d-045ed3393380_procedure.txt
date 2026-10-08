@@ -1,0 +1,3 @@
+# Operating Procedure
+1. Check power supply.
+2. Start main motor.
