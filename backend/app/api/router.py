@@ -6,6 +6,7 @@ from app.api.v1 import (
     documents,
     health,
     knowledge_bases,
+    models,
     roles,
     search,
     users,
@@ -25,3 +26,4 @@ api_router.include_router(document_types.router, tags=["Document Types"])
 api_router.include_router(documents.router, tags=["Documents"])
 api_router.include_router(search.router, tags=["Search & Retrieval"])
 api_router.include_router(chat.router, tags=["RAG Chat"])
+api_router.include_router(models.router, tags=["Model Gateway"])

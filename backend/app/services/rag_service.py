@@ -8,13 +8,15 @@ from app.schemas.chat import Citation
 from app.services.retrieval_service import RetrievalCandidate, RetrievalService
 
 
+from app.services.model_gateway import ModelGatewayService
+
+
 class RAGService:
     UNGROUNDED_REFUSAL = "I am sorry, but I do not have sufficient relevant information in the authorized knowledge bases to answer your question."
 
     def __init__(self):
         self.retrieval_service = RetrievalService()
-        self.ollama_url = settings.OLLAMA_BASE_URL
-        self.model_name = settings.CHAT_MODEL
+        self.gateway = ModelGatewayService()
 
     async def generate_rag_response(
         self,
@@ -80,7 +82,7 @@ class RAGService:
 
         full_prompt = f"System: {system_prompt}\n\nContext:\n{context_str}\n\nUser Prompt: {query}\n\nAnswer:"
 
-        # 4. Generate Answer via LLM or Deterministic Fallback
+        # 4. Generate Answer via Model Gateway
         answer = await self._call_llm(full_prompt, candidates)
         return answer, citations, True
 
@@ -120,19 +122,13 @@ class RAGService:
         yield f"data: {json.dumps(meta_data)}\n\n"
 
     async def _call_llm(self, prompt: str, candidates: List[RetrievalCandidate]) -> str:
-        """Invokes Ollama API for text generation with fallback to grounded summary synthesis."""
+        """Invokes Model Gateway for text generation with fallback to grounded summary synthesis."""
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.post(
-                    f"{self.ollama_url}/api/generate",
-                    json={"model": self.model_name, "prompt": prompt, "stream": False}
-                )
-                if res.status_code == 200:
-                    answer = res.json().get("response", "").strip()
-                    if answer:
-                        return answer
+            answer = await self.gateway.generate_chat(prompt)
+            if answer and not answer.startswith("[Synthesized Response]"):
+                return answer
         except Exception as e:
-            logger.warning("Ollama LLM connection warning, generating synthesized fallback response", error=str(e))
+            logger.warning("Model Gateway LLM warning, using grounded synthesis", error=str(e))
 
         # Grounded fallback synthesizer for offline execution/testing
         top_candidate = candidates[0]
