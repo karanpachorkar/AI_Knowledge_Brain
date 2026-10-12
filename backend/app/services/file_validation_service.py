@@ -8,6 +8,8 @@ ALLOWED_MIME_TYPES = {
     "text/markdown": [],
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [b"PK"],
     "application/msword": [b"\xd0\xcf\x11\xe0"],
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": [b"PK"],
+    "application/vnd.ms-powerpoint": [b"\xd0\xcf\x11\xe0"],
     "image/png": [b"\x89PNG\r\n\x1a\n"],
     "image/jpeg": [b"\xff\xd8\xff"],
 }

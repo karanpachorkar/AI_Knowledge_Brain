@@ -51,6 +51,20 @@ class DocumentRepository:
         )
         return list(result.scalars().all())
 
+    async def list_by_tenant(self, tenant_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Document]:
+        result = await self.session.execute(
+            select(Document)
+            .options(
+                selectinload(Document.document_type),
+                selectinload(Document.versions),
+                selectinload(Document.acls)
+            )
+            .where(Document.tenant_id == tenant_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
     async def create_version(self, tenant_id: uuid.UUID, doc_id: uuid.UUID, user_id: uuid.UUID, ver_in: DocumentVersionCreate, version_num: int) -> DocumentVersion:
         version = DocumentVersion(
             tenant_id=tenant_id,
@@ -80,3 +94,18 @@ class DocumentRepository:
         self.session.add(acl)
         await self.session.flush()
         return acl
+
+    async def get_version_by_id(self, version_id: uuid.UUID, tenant_id: uuid.UUID) -> Optional[DocumentVersion]:
+        result = await self.session.execute(
+            select(DocumentVersion).where(DocumentVersion.id == version_id, DocumentVersion.tenant_id == tenant_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_document(self, doc_id: uuid.UUID, tenant_id: uuid.UUID) -> bool:
+        doc = await self.get_document_by_id(doc_id, tenant_id)
+        if not doc:
+            return False
+        await self.session.delete(doc)
+        await self.session.flush()
+        return True
+

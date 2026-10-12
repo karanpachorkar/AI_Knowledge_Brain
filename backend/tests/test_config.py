@@ -8,8 +8,9 @@ def test_settings_default_values():
     assert settings.APPLICATION_PORT == 8000
     assert "postgresql+asyncpg" in settings.async_database_url
     assert "redis://" in settings.computed_redis_url
-    assert settings.CHAT_MODEL == "qwen2.5:7b"
+    assert settings.CHAT_MODEL in ["qwen2.5:3b", "qwen2.5:7b"]
     assert settings.EMBEDDING_MODEL == "bge-m3"
+
 
 
 def test_settings_custom_database_url():

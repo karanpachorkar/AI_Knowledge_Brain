@@ -19,10 +19,18 @@ class OllamaGatewayProvider(LLMProvider, EmbeddingProvider, VisionProvider):
     async def generate_response(self, prompt: str, system_prompt: Optional[str] = None) -> str:
         full_prompt = f"System: {system_prompt}\n\n{prompt}" if system_prompt else prompt
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=90.0) as client:
                 res = await client.post(
                     f"{self.base_url}/api/generate",
-                    json={"model": self.chat_model, "prompt": full_prompt, "stream": False}
+                    json={
+                        "model": self.chat_model,
+                        "prompt": full_prompt,
+                        "stream": False,
+                        "options": {
+                            "num_predict": 550,
+                            "temperature": 0.2,
+                        }
+                    }
                 )
                 if res.status_code == 200:
                     answer = res.json().get("response", "").strip()
@@ -32,12 +40,42 @@ class OllamaGatewayProvider(LLMProvider, EmbeddingProvider, VisionProvider):
             logger.warning("Ollama LLM gateway call failed, using fallback synthesizer", error=str(e))
         return f"[Synthesized Response]: {prompt[:100]}"
 
+
     async def stream_response(self, prompt: str, system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
-        response = await self.generate_response(prompt, system_prompt)
-        words = response.split(" ")
-        for i in range(0, len(words), 3):
-            chunk = " ".join(words[i:i+3]) + (" " if i + 3 < len(words) else "")
-            yield chunk
+        full_prompt = f"System: {system_prompt}\n\n{prompt}" if system_prompt else prompt
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/generate",
+                    json={
+                        "model": self.chat_model,
+                        "prompt": full_prompt,
+                        "stream": True,
+                        "options": {
+                            "num_predict": 550,
+                            "temperature": 0.2,
+                        }
+                    }
+                ) as response:
+                    import json
+                    async for line in response.aiter_lines():
+                        if line:
+                            try:
+                                chunk = json.loads(line)
+                                token = chunk.get("response", "")
+                                if token:
+                                    yield token
+                            except Exception:
+                                pass
+                    return
+        except Exception as e:
+            logger.warning("Ollama streaming call failed, falling back to batch response", error=str(e))
+            response = await self.generate_response(prompt, system_prompt)
+            words = response.split(" ")
+            for i in range(0, len(words), 3):
+                chunk = " ".join(words[i:i+3]) + (" " if i + 3 < len(words) else "")
+                yield chunk
 
     # --- Embedding Capabilities ---
     async def embed_documents(self, texts: List[str]) -> List[List[float]]:

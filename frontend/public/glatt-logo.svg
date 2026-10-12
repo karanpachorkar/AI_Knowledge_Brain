@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 54" fill="none">
+  <!-- Glatt Brand Icon / Crest -->
+  <g transform="translate(4, 5)">
+    <rect width="44" height="44" rx="10" fill="#c41e3a"/>
+    <path d="M22 10C15.3726 10 10 15.3726 10 22C10 28.6274 15.3726 34 22 34C28.6274 34 34 28.6274 34 22H22V17H38.5C38.8284 18.6128 39 20.2854 39 22C39 31.3888 31.3888 39 22 39C12.6112 39 5 31.3888 5 22C5 12.6112 12.6112 5 22 5C27.5684 5 32.5539 7.67137 35.6888 11.8152L31.6214 14.8658C29.3562 11.8711 25.882 10 22 10Z" fill="#ffffff"/>
+  </g>
+  <!-- Wordmark "Glatt" -->
+  <text x="58" y="36" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="800" fill="#c41e3a" letter-spacing="-0.8">Glatt</text>
+  <!-- Subtitle "AI BRAIN" -->
+  <rect x="136" y="16" width="76" height="20" rx="4" fill="#1a1a1a"/>
+  <text x="174" y="30" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="10" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="1.2">AI BRAIN</text>
+</svg>

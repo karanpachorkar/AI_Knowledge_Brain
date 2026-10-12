@@ -31,8 +31,29 @@ async def chat_completion(
         conversation = await chat_repo.get_conversation_by_id(chat_req.conversation_id, tenant_id, current_user.id)
         if not conversation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+        chat_req.workspace_id = conversation.workspace_id
     else:
         title = chat_req.message[:50] + ("..." if len(chat_req.message) > 50 else "")
+        from app.repositories.workspace_repository import WorkspaceRepository
+        from app.schemas.workspace import WorkspaceCreate
+
+        ws_repo = WorkspaceRepository(db)
+        ws = await ws_repo.get_by_id(chat_req.workspace_id, tenant_id)
+        if not ws:
+            workspaces = await ws_repo.list_by_tenant(tenant_id)
+            if workspaces:
+                ws = workspaces[0]
+            else:
+                ws = await ws_repo.create(
+                    tenant_id=tenant_id,
+                    ws_in=WorkspaceCreate(
+                        name="Default Workspace",
+                        slug="default-workspace",
+                        description="Default Workspace"
+                    )
+                )
+            chat_req.workspace_id = ws.id
+
         conversation = await chat_repo.create_conversation(
             tenant_id=tenant_id,
             workspace_id=chat_req.workspace_id,

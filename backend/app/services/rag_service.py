@@ -28,6 +28,56 @@ class RAGService:
         top_k: int = 5
     ) -> Tuple[str, List[Citation], bool]:
         """Executes full RAG workflow: Hybrid retrieval -> Grounding verification -> Context assembly -> LLM generation -> Citation mapping."""
+        # 0. Conversational Greeting / Intent Check
+        cleaned_query = (query or "").strip().lower().rstrip("!?.").strip()
+        GREETINGS = {
+            "hi", "hello", "hey", "hi there", "hello there", "hey there",
+            "good morning", "good afternoon", "good evening",
+            "how are you", "who are you", "what can you do", "help",
+            "thanks", "thank you", "bye", "goodbye"
+        }
+        if cleaned_query in GREETINGS:
+            return (
+                "Hello! I am your Enterprise AI Assistant. How can I help you today with your knowledge bases, SOPs, or enterprise documents?",
+                [],
+                True
+            )
+
+        # 0.1 Fetch Verified Document Inventory from Database
+        doc_inventory: List[str] = []
+        try:
+            from app.core.database import AsyncSessionLocal
+            from app.repositories.document_repository import DocumentRepository
+            async with AsyncSessionLocal() as session:
+                doc_repo = DocumentRepository(session)
+                docs = await doc_repo.list_by_tenant(tenant_id)
+                for d in docs:
+                    if not workspace_id or str(d.workspace_id) == str(workspace_id):
+                        ver = d.versions[0] if d.versions else None
+                        fname = ver.file_name if ver else d.title
+                        pg_count = ver.metadata_json.get("parsed_sections") if ver and ver.metadata_json else None
+                        pg_info = f" ({pg_count} sections/pages)" if pg_count else ""
+                        doc_inventory.append(f"- **{d.title}** (`{fname}`){pg_info}")
+        except Exception as ex:
+            logger.warning("Could not fetch document inventory from DB", error=str(ex))
+
+        # Check for Metadata / Inventory queries
+        inventory_phrases = [
+            "how many document", "how many file", "list document", "list file",
+            "what document", "which document", "what file", "which file",
+            "show document", "all document", "available document", "how many docs"
+        ]
+        if any(p in cleaned_query for p in inventory_phrases):
+            count = len(doc_inventory)
+            if count == 0:
+                answer = "There are currently no documents uploaded in this knowledge base."
+            elif count == 1:
+                answer = f"There is currently **1 document** in this knowledge base:\n\n{doc_inventory[0]}"
+            else:
+                docs_formatted = "\n".join(doc_inventory)
+                answer = f"There are currently **{count} documents** in this knowledge base:\n\n{docs_formatted}"
+            return answer, [], True
+
         # 1. Execute Permission-Aware Hybrid Retrieval
         candidates = await self.retrieval_service.hybrid_search(
             query=query,
@@ -36,6 +86,7 @@ class RAGService:
             knowledge_base_id=knowledge_base_id,
             limit=top_k
         )
+
 
         # 2. Grounding & Relevance Verification
         is_grounded = len(candidates) > 0 and candidates[0].fused_score > 0.05
@@ -46,6 +97,7 @@ class RAGService:
 
         if not candidates:
             return self.UNGROUNDED_REFUSAL, [], False
+
 
         # 3. Assemble Context & Citations
         context_blocks: List[str] = []
@@ -74,11 +126,22 @@ class RAGService:
             )
 
         context_str = "\n\n".join(context_blocks)
+        inv_note = ""
+        if doc_inventory:
+
+            inv_note = "\nAuthorized Documents in Workspace:\n" + "\n".join(doc_inventory) + "\nNote: Multiple sources [Source 1], [Source 2], etc., may come from different pages of the SAME document. Do not mistake source snippet counts for document counts.\n"
+
         system_prompt = (
-            "You are an enterprise AI assistant. Answer the user prompt strictly using the provided context information. "
+            "You are an enterprise AI assistant. Answer the user prompt comprehensively and accurately using the provided context information. "
+            "When listing requirements, prerequisites, tables, or step-by-step procedures, extract and list ALL items from the context completely without omission. "
+            "When summarizing documents or procedures, provide a well-structured executive summary covering all main sections and phases cleanly. "
+            "When answering questions about images, hardware, components, or manufacturers, carefully examine any [Embedded Image / Visual Content] notes and OCR data in the context. "
             "Cite sources in your text using [Source X] notation where X is the source number. "
             "If the context does not contain enough information to answer, state clearly that you do not have enough information."
+            + inv_note
         )
+
+
 
         full_prompt = f"System: {system_prompt}\n\nContext:\n{context_str}\n\nUser Prompt: {query}\n\nAnswer:"
 
@@ -130,7 +193,10 @@ class RAGService:
         except Exception as e:
             logger.warning("Model Gateway LLM warning, using grounded synthesis", error=str(e))
 
-        # Grounded fallback synthesizer for offline execution/testing
+        # Grounded fallback synthesizer for offline execution or gateway timeout
+        if not candidates:
+            return self.UNGROUNDED_REFUSAL
         top_candidate = candidates[0]
         doc_title = top_candidate.metadata.get("document_title") or "Document"
-        return f"Based on [Source 1] ({doc_title}): {top_candidate.content}"
+        highlights = "\n\n".join([f"- **{c.section_title or f'Page {c.page_number or i+1}'}**: {c.content[:220].strip()}..." for i, c in enumerate(candidates[:4])])
+        return f"### Summary ({doc_title})\n\n{highlights}"

@@ -44,6 +44,7 @@ yarn-error.log*
 *.log
 
 # Storage
+.storage_data/
 backend/.storage_data/
 
 # IDE & OS

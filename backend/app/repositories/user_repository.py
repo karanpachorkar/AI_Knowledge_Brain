@@ -68,6 +68,19 @@ class UserRepository:
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
+    async def list_all(self, skip: int = 0, limit: int = 100) -> List[User]:
+        query = (
+            select(User)
+            .options(
+                selectinload(User.tenant),
+                selectinload(User.roles).selectinload(Role.permissions)
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
     async def update(self, user: User, user_in: UserUpdate, hashed_password: Optional[str] = None, roles: Optional[List[Role]] = None) -> User:
         if user_in.full_name is not None:
             user.full_name = user_in.full_name

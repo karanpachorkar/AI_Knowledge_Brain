@@ -1,7 +1,6 @@
-version: '3.8'
-
 services:
   # Frontend Service (Next.js)
+
   frontend:
     build:
       context: .
@@ -26,9 +25,10 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.backend
     container_name: enterprise_ai_backend
     restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "8001:8000"
+
     env_file:
       - .env
     environment:
@@ -38,6 +38,13 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
       - MINIO_ENDPOINT=minio:9000
       - OLLAMA_BASE_URL=http://ollama:11434
+      - CHAT_MODEL=qwen2.5:3b
+      - EMBEDDING_MODEL=bge-m3
+    volumes:
+
+      - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+      - storage_data:/app/.storage_data
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +76,14 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
       - MINIO_ENDPOINT=minio:9000
       - OLLAMA_BASE_URL=http://ollama:11434
+      - CHAT_MODEL=qwen2.5:3b
+      - EMBEDDING_MODEL=bge-m3
+    volumes:
+
+      - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+      - storage_data:/app/.storage_data
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,10 +162,15 @@ services:
 
   # Object Storage (MinIO)
   minio:
-    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    image: elestio/minio:latest
     container_name: enterprise_ai_minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -190,3 +210,4 @@ volumes:
   opensearch_data:
   minio_data:
   ollama_data:
+  storage_data:

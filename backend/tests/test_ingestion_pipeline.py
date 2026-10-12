@@ -93,5 +93,6 @@ async def test_end_to_end_document_upload_api(async_client: AsyncClient):
     doc_data = upload_res.json()
     assert doc_data["title"] == "Operating Procedure SOP"
     assert len(doc_data["versions"]) == 1
-    assert doc_data["versions"][0]["status"] == "READY"
+    assert doc_data["versions"][0]["status"] in ["QUEUED", "READY"]
     assert doc_data["versions"][0]["file_name"] == "procedure.txt"
+

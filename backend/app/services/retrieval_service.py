@@ -54,9 +54,27 @@ class RetrievalService:
             limit=limit * 2
         )
 
-        # 3. OpenSearch BM25 Keyword Search
+        # 2. OpenSearch BM25 Keyword Search with stop word filtering and format expansion
+        lower_q = query.lower()
+        stop_words = {
+            "what", "does", "the", "a", "an", "is", "are", "was", "were", "of", "in", 
+            "to", "for", "with", "on", "at", "from", "by", "about", "as", "into", 
+            "like", "through", "after", "over", "between", "out", "against", "during", 
+            "without", "before", "under", "around", "among", "it", "its", "this", 
+            "that", "these", "those", "can", "you", "we", "i", "me", "my", "our", "do", "did"
+        }
+        tokens = [w for w in lower_q.split() if w.strip("?.,!;:\"'()[]{}") not in stop_words]
+        clean_query = " ".join(tokens) if tokens else query
+
+        if any(term in lower_q for term in ["ppt", "powerpoint", "slide", "slides", "presentation"]):
+            bm25_query = f"{clean_query} slide slides pptx presentation"
+        elif "pdf" in lower_q:
+            bm25_query = f"{clean_query} pdf page document"
+        else:
+            bm25_query = clean_query
+
         bm25_results = await self.search_provider.search_keywords(
-            query=query,
+            query=bm25_query,
             tenant_id=tenant_str,
             workspace_id=ws_str,
             knowledge_base_id=kb_str,
@@ -101,11 +119,15 @@ class RetrievalService:
                     metadata=payload.get("metadata", {})
                 )
 
-        # Calculate Fused Score
+        # Calculate Fused Score (Only positive dense cosine similarity and BM25 scores contribute)
         final_candidates: List[RetrievalCandidate] = []
         for cand in candidate_map.values():
-            cand.fused_score = (cand.dense_score * vector_weight) + (cand.bm25_score * bm25_weight)
+            norm_dense = max(0.0, cand.dense_score)
+            norm_bm25 = max(0.0, cand.bm25_score)
+            cand.fused_score = (norm_dense * vector_weight) + (norm_bm25 * bm25_weight)
             final_candidates.append(cand)
+
 
         final_candidates.sort(key=lambda x: x.fused_score, reverse=True)
         return final_candidates[:limit]
+
