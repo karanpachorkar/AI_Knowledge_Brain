@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api";
+import DocumentViewer from "@/components/DocumentViewer";
 
 interface DocumentVersion {
   id: string;
   version_number: number;
   file_name: string;
+  mime_type: string;
   status: string;
   metadata_json?: {
     generated_chunks?: number;
@@ -28,6 +30,7 @@ export default function KnowledgeBasePage() {
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [viewingDoc, setViewingDoc] = useState<{ id: string; title: string; mimeType?: string } | null>(null);
   
   // Search playground state
   const [searchQuery, setSearchQuery] = useState("");
@@ -272,7 +275,19 @@ export default function KnowledgeBasePage() {
                           <td>{renderStatusBadge(status)}</td>
                           <td style={{ color: "var(--color-primary)", fontWeight: "600" }}>{chunksCount} chunks</td>
                           <td>
-                            <div style={{ display: "flex", gap: "8px" }}>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <button
+                                onClick={() =>
+                                  setViewingDoc({
+                                    id: doc.id,
+                                    title: doc.title,
+                                    mimeType: latestVersion?.mime_type,
+                                  })
+                                }
+                                className="btn btn-secondary btn-sm"
+                              >
+                                👁 View
+                              </button>
                               {status === "FAILED" && (
                                 <button
                                   onClick={() => handleRetry(doc.id)}
@@ -390,6 +405,16 @@ export default function KnowledgeBasePage() {
             <span className="module-tag">Keyword & Exact Match</span>
           </div>
         </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {viewingDoc && (
+        <DocumentViewer
+          docId={viewingDoc.id}
+          docTitle={viewingDoc.title}
+          docMimeType={viewingDoc.mimeType}
+          onClose={() => setViewingDoc(null)}
+        />
       )}
     </>
   );

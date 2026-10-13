@@ -1,6 +1,7 @@
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_tenant_id, get_current_user, require_permission
 from app.core.database import get_db
@@ -9,6 +10,8 @@ from app.repositories.document_repository import DocumentRepository
 from app.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentVersionCreate, DocumentVersionResponse
 from app.services.ingestion_service import DocumentIngestionService
+from app.infrastructure.storage.minio_provider import MinIOStorageProvider
+from app.infrastructure.vector.qdrant_provider import QdrantVectorProvider
 
 router = APIRouter(prefix="/documents")
 
@@ -127,6 +130,112 @@ async def retry_document_ingestion(
     doc_repo = DocumentRepository(db)
     doc = await doc_repo.get_document_by_id(doc_id, tenant_id)
     return doc
+
+
+@router.get("/{doc_id}/file")
+async def download_document_file(
+    doc_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    _: User = Depends(require_permission("document.read")),
+    db: AsyncSession = Depends(get_db)
+):
+    """Streams the raw binary file for a document version — used by the in-app file viewer."""
+    doc_repo = DocumentRepository(db)
+    doc = await doc_repo.get_document_by_id(doc_id, tenant_id)
+    if not doc or not doc.versions:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document or file not found.")
+
+    latest_version = doc.versions[-1]
+    bucket_name = f"tenant-{tenant_id}"
+    storage = MinIOStorageProvider()
+
+    try:
+        file_bytes = await storage.download_file(bucket_name, latest_version.storage_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File binary not found in storage.")
+
+    mime = latest_version.mime_type or "application/octet-stream"
+    file_name = latest_version.file_name or "document"
+
+    return Response(
+        content=file_bytes,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'inline; filename="{file_name}"',
+            "Content-Length": str(len(file_bytes)),
+        }
+    )
+
+
+@router.get("/{doc_id}/chunks")
+async def get_document_chunks(
+    doc_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    _: User = Depends(require_permission("document.read")),
+    db: AsyncSession = Depends(get_db)
+) -> List[Dict[str, Any]]:
+    """Returns all indexed Qdrant vector chunks for a specific document — used by the chunk inspector view."""
+    doc_repo = DocumentRepository(db)
+    doc = await doc_repo.get_document_by_id(doc_id, tenant_id)
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
+
+    qdrant = QdrantVectorProvider()
+
+    # Scroll all points for this document using filter (no vector needed)
+    try:
+        import httpx
+        from app.core.config import settings
+        filter_payload = {
+            "filter": {
+                "must": [
+                    {"key": "tenant_id", "match": {"value": str(tenant_id)}},
+                    {"key": "document_id", "match": {"value": str(doc_id)}}
+                ]
+            },
+            "limit": 500,
+            "with_payload": True,
+            "with_vector": False
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(
+                f"{settings.QDRANT_URL}/collections/{qdrant.collection_name}/points/scroll",
+                json=filter_payload
+            )
+            if res.status_code == 200:
+                points = res.json().get("result", {}).get("points", [])
+                chunks = [
+                    {
+                        "chunk_id": pt["id"],
+                        "chunk_index": pt["payload"].get("chunk_index", 0),
+                        "section_title": pt["payload"].get("section_title"),
+                        "page_number": pt["payload"].get("page_number"),
+                        "content": pt["payload"].get("content", ""),
+                        "metadata": pt["payload"].get("metadata", {}),
+                    }
+                    for pt in points
+                ]
+                chunks.sort(key=lambda c: c["chunk_index"])
+                return chunks
+    except Exception:
+        pass
+
+    # Memory store fallback (dev / no Qdrant)
+    chunks_from_memory = [
+        {
+            "chunk_id": pt["id"],
+            "chunk_index": pt["payload"].get("chunk_index", 0),
+            "section_title": pt["payload"].get("section_title"),
+            "page_number": pt["payload"].get("page_number"),
+            "content": pt["payload"].get("content", ""),
+            "metadata": pt["payload"].get("metadata", {}),
+        }
+        for pt in qdrant._shared_memory_vectors
+        if str(pt["payload"].get("tenant_id")) == str(tenant_id)
+        and str(pt["payload"].get("document_id")) == str(doc_id)
+    ]
+    chunks_from_memory.sort(key=lambda c: c["chunk_index"])
+    return chunks_from_memory
 
 
 @router.delete("/{doc_id}", status_code=status.HTTP_200_OK)
