@@ -8,7 +8,14 @@ from app.api.deps import get_current_tenant_id, get_current_user, require_permis
 from app.core.database import get_db
 from app.models.user import User
 from app.repositories.chat_repository import ChatRepository
-from app.schemas.chat import ChatRequest, ChatResponse, ConversationResponse, MessageResponse
+from app.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+    ConversationResponse,
+    MessageDeleteRequest,
+    MessageResponse,
+)
+from app.services.agentic_rag_service import AgenticRAGService
 from app.services.rag_service import RAGService
 
 router = APIRouter(prefix="/chat")
@@ -23,7 +30,7 @@ async def chat_completion(
 ):
     """Executes permission-aware RAG chat query with citation tracking and anti-hallucination guardrails."""
     chat_repo = ChatRepository(db)
-    rag_service = RAGService()
+    rag_service = AgenticRAGService()
 
     # 1. Get or Create Conversation
     conversation = None
@@ -107,7 +114,7 @@ async def chat_stream(
     _: User = Depends(require_permission("document.read")),
 ):
     """Server-Sent Events (SSE) streaming RAG response endpoint."""
-    rag_service = RAGService()
+    rag_service = AgenticRAGService()
     generator = rag_service.stream_rag_response(
         query=chat_req.message,
         tenant_id=tenant_id,
@@ -151,3 +158,70 @@ async def get_conversation(
     if not conv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
     return conv
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deletes one user-owned conversation and all of its messages."""
+    chat_repo = ChatRepository(db)
+    deleted = await chat_repo.delete_conversation(
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+    await db.commit()
+
+
+@router.delete("/conversations/{conversation_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_message(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deletes one message from a user-owned conversation."""
+    chat_repo = ChatRepository(db)
+    deleted = await chat_repo.delete_message(
+        message_id=message_id,
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found.")
+    await db.commit()
+
+
+@router.delete(
+    "/conversations/{conversation_id}/messages",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_messages(
+    conversation_id: uuid.UUID,
+    request: MessageDeleteRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deletes selected messages, or all messages when message_ids is empty."""
+    chat_repo = ChatRepository(db)
+    conversation = await chat_repo.get_conversation_by_id(
+        conversation_id, tenant_id, current_user.id
+    )
+    if not conversation:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+    await chat_repo.delete_messages(
+        conversation_id=conversation_id,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        message_ids=request.message_ids or None,
+    )
+    await db.commit()

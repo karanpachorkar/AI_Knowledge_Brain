@@ -1,10 +1,20 @@
 import uuid
 from typing import List, Optional
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.chat import Conversation, Message
+
+
+def _remove_null_bytes(value):
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_remove_null_bytes(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _remove_null_bytes(item) for key, item in value.items()}
+    return value
 
 
 class ChatRepository:
@@ -81,10 +91,66 @@ class ChatRepository:
             conversation_id=conversation_id,
             tenant_id=tenant_id,
             role=role,
-            content=content,
-            citations_json=citations_json,
-            metadata_json=metadata_json
+            content=_remove_null_bytes(content),
+            citations_json=_remove_null_bytes(citations_json),
+            metadata_json=_remove_null_bytes(metadata_json)
         )
         self.session.add(msg)
         await self.session.flush()
         return msg
+
+    async def delete_message(
+        self,
+        message_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> bool:
+        stmt = (
+            delete(Message)
+            .where(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+                Message.tenant_id == tenant_id,
+                Message.conversation.has(
+                    Conversation.user_id == user_id,
+                    Conversation.tenant_id == tenant_id,
+                ),
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount > 0
+
+    async def delete_messages(
+        self,
+        conversation_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+        message_ids: Optional[List[uuid.UUID]] = None,
+    ) -> int:
+        conditions = [
+            Message.conversation_id == conversation_id,
+            Message.tenant_id == tenant_id,
+            Message.conversation.has(
+                Conversation.user_id == user_id,
+                Conversation.tenant_id == tenant_id,
+            ),
+        ]
+        if message_ids:
+            conditions.append(Message.id.in_(message_ids))
+        result = await self.session.execute(delete(Message).where(*conditions))
+        return result.rowcount or 0
+
+    async def delete_conversation(
+        self,
+        conversation_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> bool:
+        stmt = delete(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.tenant_id == tenant_id,
+            Conversation.user_id == user_id,
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount > 0

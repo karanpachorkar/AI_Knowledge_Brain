@@ -2,16 +2,80 @@
 
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import { Citation } from "@/lib/api";
 
 interface MarkdownRendererProps {
   content: string;
+  citations?: Citation[];
 }
 
-export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
+function CitationImage({
+  src,
+  alt,
+  citation,
+}: {
+  src?: string;
+  alt?: string;
+  citation?: Citation;
+}) {
+  const [imageUrl, setImageUrl] = React.useState<string | null>(null);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!citation) return;
+
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    const loadImage = async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        const response = await fetch(`/api/v1/documents/${citation.document_id}/file`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!response.ok) throw new Error(`Image request failed: ${response.status}`);
+        objectUrl = URL.createObjectURL(await response.blob());
+        if (!cancelled) setImageUrl(objectUrl);
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    };
+
+    loadImage();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [citation]);
+
+  if (error) {
+    return <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>Unable to load the cited image.</div>;
+  }
+  if (!imageUrl) {
+    return <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>Loading cited image…</div>;
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={alt || citation?.document_title || "Cited image"}
+      style={{ maxWidth: "100%", maxHeight: "520px", borderRadius: "8px", display: "block", margin: "10px 0" }}
+    />
+  );
+}
+
+export default function MarkdownRenderer({ content, citations = [] }: MarkdownRendererProps) {
   return (
     <div className="markdown-content" style={{ fontSize: "14px", lineHeight: "1.6", color: "inherit" }}>
       <ReactMarkdown
         components={{
+          img: ({ src, alt }) => {
+            const sourceName = decodeURIComponent(src || "").split("/").pop()?.toLowerCase();
+            const citation = citations.find((item) => {
+              const title = (item.document_title || "").toLowerCase();
+              return sourceName && title === sourceName;
+            }) || citations.find((item) => /\.(png|jpe?g|gif|webp|bmp)$/i.test(item.document_title || ""));
+            return <CitationImage src={src} alt={alt} citation={citation} />;
+          },
           p: ({ children }) => (
             <p style={{ margin: "0 0 10px 0", lineHeight: "1.6" }}>{children}</p>
           ),

@@ -22,7 +22,7 @@ export default function DashboardPage() {
         setLoading(false);
       })
       .catch(() => {
-        // Fallback demo state if backend not running locally yet
+        // Offline fallback when backend is unreachable
         setHealth({
           status: 'healthy (online)',
           environment: 'production',

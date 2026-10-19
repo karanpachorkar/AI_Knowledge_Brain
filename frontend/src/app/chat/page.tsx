@@ -93,6 +93,35 @@ export default function ChatPage() {
     setShowHistoryModal(false);
   };
 
+  const handleDeleteConversation = async () => {
+    if (!conversationId) return;
+    if (!window.confirm("Delete this chat and all of its messages?")) return;
+    try {
+      await fetchWithAuth(`/chat/conversations/${conversationId}`, { method: "DELETE" });
+      setConversationsList((prev) => prev.filter((conversation) => conversation.id !== conversationId));
+      handleNewChat();
+    } catch (err: any) {
+      window.alert(err.message || "Failed to delete chat.");
+    }
+  };
+
+  const handleDownloadChat = () => {
+    if (messages.length === 0) return;
+    const text = messages
+      .map((message) => {
+        const role = message.role === "user" ? "You" : "Glatt AI Assistant";
+        return `${role}\n${message.content}`;
+      })
+      .join("\n\n------------------------------\n\n");
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${conversationId || "chat"}-${new Date().toISOString().slice(0, 10)}.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     const initChat = async () => {
       const convs = await fetchConversations();
@@ -200,6 +229,21 @@ export default function ChatPage() {
             className="btn btn-secondary btn-sm"
           >
             📜 History ({conversationsList.length})
+          </button>
+          <button
+            onClick={handleDownloadChat}
+            className="btn btn-secondary btn-sm"
+            disabled={messages.length === 0}
+          >
+            ↓ Download
+          </button>
+          <button
+            onClick={handleDeleteConversation}
+            className="btn btn-secondary btn-sm"
+            disabled={!conversationId}
+            style={{ color: "var(--color-danger)" }}
+          >
+            🗑 Delete Chat
           </button>
           <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: "500", color: "var(--text-secondary)", cursor: "pointer", userSelect: "none", marginLeft: "4px" }}>
             <input
@@ -342,6 +386,7 @@ export default function ChatPage() {
                       style={{
                         alignSelf: isUser ? "flex-end" : "flex-start",
                         maxWidth: isUser ? "75%" : "85%",
+                        position: "relative",
                         padding: isUser ? "10px 16px" : "16px 20px",
                         borderRadius: isUser ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
                         backgroundColor: isUser ? "var(--color-primary)" : "var(--bg-primary)",
@@ -372,7 +417,7 @@ export default function ChatPage() {
                           {msg.content}
                         </div>
                       ) : (
-                        <MarkdownRenderer content={msg.content} />
+                        <MarkdownRenderer content={msg.content} citations={msg.citations} />
                       )}
 
                       {/* Citation Pills for Assistant */}

@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest, RefreshTokenRequest, TokenResponse
 from app.schemas.user import UserRegistration, UserResponse
 from app.services.auth_service import AuthService
@@ -49,26 +48,3 @@ async def get_me(
 ):
     """Retrieves profile, roles, and permissions of currently authenticated user."""
     return AuthService.format_user_response(current_user)
-
-
-@router.post("/demo-token", response_model=TokenResponse)
-async def get_demo_token(
-    db: AsyncSession = Depends(get_db)
-):
-    """Issues a demo access token for seamless UI authentication."""
-    auth_service = AuthService(db)
-    user_repo = UserRepository(db)
-    users = await user_repo.list_all(skip=0, limit=1)
-    if users:
-        user = users[0]
-    else:
-        user, _ = await auth_service.register_tenant_and_admin(
-            UserRegistration(
-                tenant_name="Default Organization",
-                tenant_slug="default-org",
-                admin_email="admin@enterprise.ai",
-                admin_password="AdminPassword123!",
-                admin_full_name="Default Admin"
-            )
-        )
-    return auth_service.generate_tokens(user)

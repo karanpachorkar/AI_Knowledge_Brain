@@ -5,6 +5,9 @@ import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api";
 import DocumentViewer from "@/components/DocumentViewer";
 
+const SUPPORTED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".ppt", ".txt", ".md"];
+const ACCEPTED_FILE_TYPES = SUPPORTED_EXTENSIONS.join(",");
+
 interface DocumentVersion {
   id: string;
   version_number: number;
@@ -38,6 +41,28 @@ export default function KnowledgeBasePage() {
   const [searching, setSearching] = useState(false);
 
   const kbId = "00000000-0000-0000-0000-000000000002";
+
+  const handleFileChange = (selectedFile: File | null) => {
+    if (!selectedFile) {
+      setFile(null);
+      return;
+    }
+
+    const extension = `.${selectedFile.name.split(".").pop()?.toLowerCase() || ""}`;
+    if (!SUPPORTED_EXTENSIONS.includes(extension)) {
+      setFile(null);
+      setStatusMsg(
+        `Upload Error: Unsupported file type "${extension || "unknown"}". Supported extensions: ${SUPPORTED_EXTENSIONS.join(", ")}.`
+      );
+      return;
+    }
+
+    setFile(selectedFile);
+    if (!title.trim()) {
+      setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
+    }
+    setStatusMsg("");
+  };
 
   const loadDocuments = async () => {
     try {
@@ -201,15 +226,20 @@ export default function KnowledgeBasePage() {
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label required">Select Binary File (.pdf, .docx, .txt, .md)</label>
+                <label className="form-label required">
+                  Select File (.png, .jpg, .jpeg, .pdf, .docx, .doc, .xlsx, .pptx, .ppt, .txt, .md)
+                </label>
                 <input
                   type="file"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  accept={ACCEPTED_FILE_TYPES}
+                  onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
                   className="form-control"
                   style={{ padding: "8px 12px" }}
                   required
                 />
-                <span className="form-help">Supported formats: PDF, DOCX, Markdown, Text. Automatic OCR enabled.</span>
+                <span className="form-help">
+                  Supported: PNG, JPG/JPEG, PDF, DOC/DOCX, XLSX, PPT/PPTX, TXT, and Markdown. Maximum size: 50 MB.
+                </span>
               </div>
 
               <button

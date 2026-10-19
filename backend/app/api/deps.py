@@ -16,40 +16,35 @@ async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    """FastAPI Dependency: Decodes JWT bearer token and retrieves active user, with fallback dev user."""
-    if token:
-        payload = decode_token(token)
-        if payload and payload.get("type") == "access":
-            user_id_str: Optional[str] = payload.get("sub")
-            if user_id_str:
-                user_repo = UserRepository(db)
-                try:
-                    user = await user_repo.get_by_id(uuid.UUID(user_id_str))
-                    if user and user.is_active:
-                        return user
-                except Exception:
-                    pass
-
-    # Fallback default dev admin user
-    user_repo = UserRepository(db)
-    users = await user_repo.list_all(skip=0, limit=1)
-    if users:
-        return users[0]
-
-    # Provision default Tenant Admin user if DB is completely empty
-    from app.services.auth_service import AuthService
-    from app.schemas.user import UserRegistration
-    auth_service = AuthService(db)
-    dev_user, _ = await auth_service.register_tenant_and_admin(
-        UserRegistration(
-            tenant_name="Default Organization",
-            tenant_slug="default-org",
-            admin_email="admin@enterprise.ai",
-            admin_password="AdminPassword123!",
-            admin_full_name="Default Admin"
-        )
+    """FastAPI Dependency: Decodes JWT bearer token and retrieves active user."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated. Please log in.",
+        headers={"WWW-Authenticate": "Bearer"},
     )
-    return dev_user
+
+    if not token:
+        raise credentials_exception
+
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "access":
+        raise credentials_exception
+
+    user_id_str: Optional[str] = payload.get("sub")
+    if not user_id_str:
+        raise credentials_exception
+
+    user_repo = UserRepository(db)
+    try:
+        user = await user_repo.get_by_id(uuid.UUID(user_id_str))
+    except Exception:
+        raise credentials_exception
+
+    if not user or not user.is_active:
+        raise credentials_exception
+
+    return user
+
 
 
 async def get_current_tenant_id(

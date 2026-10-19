@@ -111,14 +111,18 @@ class OllamaGatewayProvider(LLMProvider, EmbeddingProvider, VisionProvider):
     async def analyze_image(self, image_bytes: bytes, prompt: str) -> str:
         b64_img = base64.b64encode(image_bytes).decode("utf-8")
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 res = await client.post(
                     f"{self.base_url}/api/generate",
                     json={
                         "model": self.vision_model,
                         "prompt": prompt,
                         "images": [b64_img],
-                        "stream": False
+                        "stream": False,
+                        "options": {
+                            "num_predict": 300,
+                            "temperature": 0.2,
+                        },
                     }
                 )
                 if res.status_code == 200:

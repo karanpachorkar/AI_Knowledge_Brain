@@ -53,3 +53,7 @@ class ConversationResponse(BaseModel):
     messages: List[MessageResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MessageDeleteRequest(BaseModel):
+    message_ids: List[uuid.UUID] = Field(default_factory=list)

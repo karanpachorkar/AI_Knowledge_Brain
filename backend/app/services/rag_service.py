@@ -86,6 +86,7 @@ class RAGService:
             knowledge_base_id=knowledge_base_id,
             limit=top_k
         )
+        candidates = self.retrieval_service.deduplicate_candidates(candidates)
 
 
         # 2. Grounding & Relevance Verification
@@ -107,9 +108,10 @@ class RAGService:
             doc_title = cand.metadata.get("document_title") or "Document"
             sec_title = cand.section_title or "Overview"
             pg_num = cand.page_number or 1
+            content = cand.content.replace("\x00", "")
 
             context_blocks.append(
-                f"[Source {idx}] Document: '{doc_title}' | Section: '{sec_title}' | Page: {pg_num}\nContent: {cand.content}"
+                f"[Source {idx}] Document: '{doc_title}' | Section: '{sec_title}' | Page: {pg_num}\nContent: {content}"
             )
 
             citations.append(
@@ -120,7 +122,7 @@ class RAGService:
                     chunk_id=cand.chunk_id,
                     section_title=sec_title,
                     page_number=pg_num,
-                    snippet=cand.content[:200],
+                    snippet=content[:200],
                     relevance_score=cand.fused_score
                 )
             )
@@ -132,12 +134,17 @@ class RAGService:
             inv_note = "\nAuthorized Documents in Workspace:\n" + "\n".join(doc_inventory) + "\nNote: Multiple sources [Source 1], [Source 2], etc., may come from different pages of the SAME document. Do not mistake source snippet counts for document counts.\n"
 
         system_prompt = (
-            "You are an enterprise AI assistant. Answer the user prompt comprehensively and accurately using the provided context information. "
+            "You are an enterprise AI assistant. Answer the specific question asked, accurately using the provided context information. "
+            "Keep the response focused on the requested scope; do not expand into later or adjacent procedures just because they appear in the same document. "
+            "Deduplicate repeated facts across documents and chunks. If the same error, step, or requirement appears in multiple sources, combine it into one item and cite the relevant sources together. "
+            "Never list the same factual item more than once unless the sources provide materially different details. "
             "When listing requirements, prerequisites, tables, or step-by-step procedures, extract and list ALL items from the context completely without omission. "
             "When summarizing documents or procedures, provide a well-structured executive summary covering all main sections and phases cleanly. "
             "When answering questions about images, hardware, components, or manufacturers, carefully examine any [Embedded Image / Visual Content] notes and OCR data in the context. "
             "Cite sources in your text using [Source X] notation where X is the source number. "
-            "If the context does not contain enough information to answer, state clearly that you do not have enough information."
+            "If the context does not contain enough information to answer, state clearly that you do not have enough information. "
+            "If the context contains clearly related information outside the requested scope, do not explain it in the main answer; optionally add one brief final sentence beginning with "
+            "'Related information available:' to tell the user what else can be asked about. Do not add that sentence when there is no meaningful related information."
             + inv_note
         )
 

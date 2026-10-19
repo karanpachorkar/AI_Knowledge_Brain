@@ -1,8 +1,11 @@
 import io
 import re
+import zipfile
+import xml.etree.ElementTree as ET
 from typing import List
 from app.infrastructure.parsers.base import DocumentParser, ParsedDocument, ParsedSection
 from app.core.logging import logger
+from app.services.model_gateway import ModelGatewayService
 
 
 class StandardDocumentParser(DocumentParser):
@@ -14,6 +17,7 @@ class StandardDocumentParser(DocumentParser):
         "application/msword",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "image/png",
         "image/jpeg",
     }
@@ -39,12 +43,95 @@ class StandardDocumentParser(DocumentParser):
         if "presentation" in mime or fname.endswith((".pptx", ".ppt")):
             return self._parse_pptx(file_bytes, file_name)
 
-        # 4. Image OCR Parsing
+        # 4. XLSX Spreadsheet Parsing
+        if "spreadsheetml" in mime or fname.endswith(".xlsx"):
+            return self._parse_xlsx(file_bytes, file_name)
+
+        # 5. Image OCR Parsing
         if mime.startswith("image/") or any(fname.endswith(ext) for ext in [".png", ".jpg", ".jpeg"]):
             return await self._parse_image(file_bytes, file_name, mime_type)
 
-        # 5. Plain Text / Markdown Parsing
+        # 6. Plain Text / Markdown Parsing
         return self._parse_text(file_bytes, file_name)
+
+    def _parse_xlsx(self, file_bytes: bytes, file_name: str) -> ParsedDocument:
+        """Extracts visible cell values from XLSX files without indexing ZIP bytes."""
+        namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        sections: List[ParsedSection] = []
+
+        try:
+            with zipfile.ZipFile(io.BytesIO(file_bytes)) as workbook:
+                shared_strings: List[str] = []
+                if "xl/sharedStrings.xml" in workbook.namelist():
+                    root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                    for item in root.findall("main:si", namespace):
+                        shared_strings.append("".join(item.itertext()).strip())
+
+                sheet_files = sorted(
+                    name for name in workbook.namelist()
+                    if name.startswith("xl/worksheets/sheet") and name.endswith(".xml")
+                )
+                for sheet_number, sheet_file in enumerate(sheet_files, start=1):
+                    root = ET.fromstring(workbook.read(sheet_file))
+                    rows: List[str] = []
+                    for row in root.findall(".//main:sheetData/main:row", namespace):
+                        values: List[str] = []
+                        for cell in row.findall("main:c", namespace):
+                            value = cell.find("main:v", namespace)
+                            if value is None or value.text is None:
+                                continue
+                            cell_value = value.text
+                            if cell.get("t") == "s":
+                                index = int(cell_value)
+                                cell_value = shared_strings[index] if index < len(shared_strings) else ""
+                            values.append(cell_value.replace("\x00", ""))
+                        if values:
+                            rows.append(" | ".join(values))
+
+                    if rows:
+                        sections.append(
+                            ParsedSection(
+                                title=f"Sheet {sheet_number}",
+                                content="\n".join(rows),
+                                page_number=sheet_number,
+                                is_table=True,
+                            )
+                        )
+
+            if not sections:
+                sections.append(
+                    ParsedSection(
+                        title="Spreadsheet",
+                        content="[Empty spreadsheet]",
+                        page_number=1,
+                        is_table=True,
+                    )
+                )
+
+            full_text = "\n\n".join(
+                f"## {section.title}\n{section.content}" for section in sections
+            )
+            return ParsedDocument(
+                title=file_name,
+                sections=sections,
+                full_text=full_text,
+                metadata={"parser": "XlsxXmlParser", "section_count": len(sections)},
+            )
+        except Exception as exc:
+            logger.error("Error parsing XLSX document", file_name=file_name, error=str(exc))
+            return ParsedDocument(
+                title=file_name,
+                sections=[
+                    ParsedSection(
+                        title="Spreadsheet",
+                        content="[Spreadsheet could not be parsed]",
+                        page_number=1,
+                        is_table=True,
+                    )
+                ],
+                full_text="## Spreadsheet\n[Spreadsheet could not be parsed]",
+                metadata={"parser": "XlsxXmlParser", "section_count": 1},
+            )
 
     def _parse_pptx(self, file_bytes: bytes, file_name: str) -> ParsedDocument:
         sections: List[ParsedSection] = []
@@ -201,14 +288,51 @@ class StandardDocumentParser(DocumentParser):
 
     async def _parse_image(self, file_bytes: bytes, file_name: str, mime_type: str) -> ParsedDocument:
         from app.infrastructure.providers.ocr_provider import StandardOCRProvider
+
         ocr = StandardOCRProvider()
         text = await ocr.extract_text(file_bytes, mime_type)
+        visual_description = ""
+
+        if not self._has_usable_ocr(text):
+            visual_description = await ModelGatewayService().analyze_vision(
+                file_bytes,
+                (
+                    "Analyze this image for enterprise knowledge-base indexing. "
+                    "Return a concise, factual description of the visible scene, objects, "
+                    "components, layout, diagrams, charts, UI elements, warnings, and any "
+                    "meaningful relationships. Include visible text only when readable. "
+                    "Do not invent values or details; explicitly state uncertainty when needed."
+                ),
+            )
+
+        content_parts = []
+        if self._has_usable_ocr(text):
+            content_parts.append(f"[OCR Text]\n{text.strip()}")
+        if visual_description and not visual_description.startswith("[Vision Analysis Fallback]"):
+            content_parts.append(f"[Visual Description]\n{visual_description.strip()}")
+
+        content = "\n\n".join(content_parts)
+        if not content:
+            content = "[Image contains no extractable text or available visual description]"
+
         return ParsedDocument(
             title=file_name,
-            sections=[ParsedSection(title="Image Content", content=text, page_number=1, is_table=False)],
-            full_text=f"## Image Content\n{text}",
-            metadata={"parser": "OCRParser", "section_count": 1}
+            sections=[ParsedSection(title="Image Content", content=content, page_number=1, is_table=False)],
+            full_text=f"## Image Content\n{content}",
+            metadata={
+                "parser": "OCRVisionParser",
+                "section_count": 1,
+                "ocr_used": self._has_usable_ocr(text),
+                "vision_used": bool(visual_description and not visual_description.startswith("[Vision Analysis Fallback]")),
+            }
         )
+
+    @staticmethod
+    def _has_usable_ocr(text: str) -> bool:
+        if not text:
+            return False
+        normalized = text.strip()
+        return len(normalized) >= 3 and not normalized.startswith("[OCR Text Extracted]:")
 
     def _parse_pdf(self, file_bytes: bytes, file_name: str) -> ParsedDocument:
         sections: List[ParsedSection] = []
@@ -350,7 +474,7 @@ class StandardDocumentParser(DocumentParser):
     def _parse_text(self, file_bytes: bytes, file_name: str) -> ParsedDocument:
         raw_text = ""
         try:
-            raw_text = file_bytes.decode("utf-8", errors="replace")
+            raw_text = file_bytes.decode("utf-8", errors="replace").replace("\x00", "")
         except Exception:
             raw_text = str(file_bytes)
 
@@ -408,4 +532,3 @@ class StandardDocumentParser(DocumentParser):
             full_text=full_text,
             metadata={"parser": "StandardTextParser", "section_count": len(sections)}
         )
-

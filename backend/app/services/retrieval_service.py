@@ -1,4 +1,5 @@
 import uuid
+import re
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from app.infrastructure.embeddings.ollama_provider import OllamaEmbeddingProvider
@@ -131,3 +132,24 @@ class RetrievalService:
         final_candidates.sort(key=lambda x: x.fused_score, reverse=True)
         return final_candidates[:limit]
 
+    @staticmethod
+    def deduplicate_candidates(
+        candidates: List[RetrievalCandidate],
+    ) -> List[RetrievalCandidate]:
+        """Remove exact duplicate chunks after normalizing formatting differences."""
+        unique: List[RetrievalCandidate] = []
+        seen_contents = set()
+
+        for candidate in sorted(
+            candidates,
+            key=lambda item: item.fused_score,
+            reverse=True,
+        ):
+            content = re.sub(r"\s+", " ", candidate.content).strip().lower()
+            if not content or content in seen_contents:
+                continue
+
+            unique.append(candidate)
+            seen_contents.add(content)
+
+        return unique

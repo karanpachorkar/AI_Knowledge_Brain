@@ -1,4 +1,5 @@
 import hashlib
+import os
 from typing import BinaryIO, Tuple
 from fastapi import HTTPException, status
 
@@ -8,6 +9,7 @@ ALLOWED_MIME_TYPES = {
     "text/markdown": [],
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [b"PK"],
     "application/msword": [b"\xd0\xcf\x11\xe0"],
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [b"PK"],
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": [b"PK"],
     "application/vnd.ms-powerpoint": [b"\xd0\xcf\x11\xe0"],
     "image/png": [b"\x89PNG\r\n\x1a\n"],
@@ -15,6 +17,10 @@ ALLOWED_MIME_TYPES = {
 }
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+ALLOWED_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".pdf", ".docx", ".doc",
+    ".xlsx", ".pptx", ".ppt", ".txt", ".md"
+}
 
 
 class FileValidationService:
@@ -39,6 +45,14 @@ class FileValidationService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File '{file_name}' is empty."
+            )
+
+        extension = os.path.splitext(file_name)[1].lower()
+        if extension not in ALLOWED_EXTENSIONS:
+            supported = ", ".join(sorted(ALLOWED_EXTENSIONS))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file extension '{extension or '[none]'}'. Supported extensions: {supported}."
             )
 
         # Magic Bytes Signature Verification where applicable

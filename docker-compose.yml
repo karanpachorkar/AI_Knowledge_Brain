@@ -1,6 +1,5 @@
 services:
   # Frontend Service (Next.js)
-
   frontend:
     build:
       context: .
@@ -28,7 +27,6 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8001:8000"
-
     env_file:
       - .env
     environment:
@@ -41,7 +39,6 @@ services:
       - CHAT_MODEL=qwen2.5:3b
       - EMBEDDING_MODEL=bge-m3
     volumes:
-
       - ./backend/app:/app/app
       - ./backend/tests:/app/tests
       - storage_data:/app/.storage_data
@@ -51,7 +48,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -79,11 +80,9 @@ services:
       - CHAT_MODEL=qwen2.5:3b
       - EMBEDDING_MODEL=bge-m3
     volumes:
-
       - ./backend/app:/app/app
       - ./backend/tests:/app/tests
       - storage_data:/app/.storage_data
-
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,13 +130,14 @@ services:
     image: qdrant/qdrant:v1.9.2
     container_name: enterprise_ai_qdrant
     restart: unless-stopped
+    ports:
+      - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    # Disabled because this image does not contain wget.
+    # Qdrant readiness was verified separately through /readyz.
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      disable: true
     networks:
       - enterprise_ai_network
 
@@ -169,8 +169,6 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-
-
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -192,10 +190,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      test: ["CMD", "ollama", "list"]
       interval: 15s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 30s
     networks:
       - enterprise_ai_network
 
